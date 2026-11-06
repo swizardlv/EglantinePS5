@@ -18,7 +18,7 @@ bash "$source/configure" --prefix="$scratch/ffmpeg-native/install" \
     --ar=llvm-ar-18 --ranlib=llvm-ranlib-18 --nm=llvm-nm-18 \
     --disable-autodetect --disable-everything --disable-programs --disable-doc \
     --disable-avdevice --disable-avformat --disable-network --disable-swresample \
-    --enable-decoder=h264,vp8,vp9 --enable-filter=yadif,scale --enable-pic \
+    --enable-decoder=h264,vp8,vp9,av1 --enable-filter=yadif,scale --enable-pic \
     --enable-pthreads --disable-shared --enable-static
 make -j"${EDEN_BUILD_JOBS:-$(nproc)}"
 make install
