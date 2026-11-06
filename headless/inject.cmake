@@ -5,6 +5,18 @@ function(add_eden_headless)
     include("${EDEN_PORT_DIR}/CMakeLists.txt")
 endfunction()
 cmake_language(DEFER CALL add_eden_headless)
+# libdav1d (FFmpeg's AV1 decoder): Eden's FindFFmpeg only links the FFmpeg
+# component libraries, not their external dependencies, so a static libavcodec
+# built with --enable-libdav1d leaves dav1d_* symbols unresolved at the final
+# link. build-headless-native.sh passes -DDAV1D_LIBRARY=<.../libdav1d.a>;
+# link it to video_core (a static archive, so it propagates to eden-headless)
+# after the FFmpeg libraries, so it resolves libavcodec's references.
+function(link_dav1d_to_video_core)
+    if(DAV1D_LIBRARY AND EXISTS "${DAV1D_LIBRARY}" AND TARGET video_core)
+        target_link_libraries(video_core PRIVATE "${DAV1D_LIBRARY}")
+    endif()
+endfunction()
+cmake_language(DEFER CALL link_dav1d_to_video_core)
 # One header is replaced for every target: common/sparse_large_vector.h, whose inline functions
 # decide how Eden's large tables take their memory (headless/CMakeLists.txt writes the derived
 # copy). This runs before any target exists, so the folder leads every include path: a source

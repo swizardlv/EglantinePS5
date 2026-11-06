@@ -39,6 +39,13 @@ cdeps="$EDEN_NATIVE_C_DEPS"
 test -f "$cdeps/lib/libcrypto.a"
 ffmpeg="$scratch/ffmpeg-native/install"
 test -f "$ffmpeg/lib/libavcodec.a" || { echo 'Run tools/build-headless-ffmpeg.sh first.' >&2; exit 1; }
+# libdav1d: FFmpeg's AV1 decoder (static). video_core links libavcodec.a, whose
+# libdav1d decoder references dav1d_* symbols; the archive must be on the final
+# link. Passed as -D and linked to video_core by headless/inject.cmake.
+dav1d_arg=()
+if [[ -f "$scratch/dav1d/lib/libdav1d.a" ]]; then
+    dav1d_arg=(-DDAV1D_LIBRARY="$scratch/dav1d/lib/libdav1d.a")
+fi
 cmake -S "$scratch/source" -B "$scratch/native-local" -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE="$root/headless/ps5.cmake" -DPS5_NATIVE=ON -DEDEN_DEVICE_FRONTEND="$devices" \
     -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=OFF \
@@ -56,6 +63,7 @@ cmake -S "$scratch/source" -B "$scratch/native-local" -G Ninja \
     -DYUZU_TESTS=OFF -DBUILD_TESTING=OFF -DENABLE_OPENGL="$graphics" -DEDEN_PS5_OPENGL="$graphics" -DENABLE_CUBEB=OFF \
     -DENABLE_WEB_SERVICE=OFF -DENABLE_LIBUSB=OFF -DYUZU_CRASH_DUMPS=OFF \
     -U 'FFmpeg_*' -DYUZU_USE_EXTERNAL_FFMPEG=OFF -DFFMPEG_DIR="$ffmpeg" \
+    "${dav1d_arg[@]}" \
     -DOPENSSL_INCLUDE_DIR="$cdeps/include" -DOPENSSL_SSL_LIBRARY="$cdeps/lib/libssl.a" \
     -DOPENSSL_CRYPTO_LIBRARY="$cdeps/lib/libcrypto.a" -DOpenSSL_FORCE_SYSTEM=ON \
     -DZLIB_INCLUDE_DIR="$cdeps/include" -DZLIB_LIBRARY="$cdeps/lib/libz.a" \
