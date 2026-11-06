@@ -72,6 +72,7 @@ extern "C" std::int64_t sceKernelGetDirectMemorySize();
 #include "common/logging.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
+#include "common/scm_rev.h"
 #include "core/core.h"
 #include "core/cpu_manager.h"
 #include "core/frontend/emu_window.h"
@@ -1242,6 +1243,7 @@ int main(int argc, char** argv) {
             passed("core_initialized");
             for (unsigned cycle = 0; guest && cycle < cycles; ++cycle) {
                 if (game) LOG_INFO(Frontend, "EDEN_GAME_SESSION_BEGIN {}", cycle + 1);
+                if (game) LOG_INFO(Frontend, "EDEN_BUILD scm_rev={} branch={} build={}", Common::g_scm_rev, Common::g_scm_branch, Common::g_build_fullname);
                 struct Completion {
                     std::mutex mutex;
                     std::condition_variable wake;
