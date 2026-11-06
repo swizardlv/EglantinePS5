@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # deploy-ps5.sh -- one-command EglantinePS5 build + deploy + verify for the PS5.
 #
-# Why this script exists: deploys used to be manual (make install writes only
-# the internal copy; the USB copy needed a separate FTP upload; and nobody
-# checked whether the RUNNING app process had actually reloaded the new
-# eboot). The result: several rounds of "testing" a build that was never
-# running. This script closes the loop.
+# Why this script exists: deploys used to go to three places
+# (/mnt/usb1/PPSA98515, /mnt/usb1/homebrew/PPSA98515, /data/homebrew/PPSA98515)
+# and nobody checked which one the app actually runs from. It runs from
+# /mnt/usb1/PPSA98515 -- proved by "550 Text file busy" when the app is
+# running (the live eboot is locked by the process). The other two copies
+# were updated while the live one stayed on an old build, so several rounds
+# "tested" a build that was never running. This script deploys to ONE place
+# only (/mnt/usb1/PPSA98515) and verifies the RUNNING build from the log.
 #
 # Usage (run inside tmux on 253; builds take a long time):
-#   ./deploy-ps5.sh build   [PS5_HOST]   Build + deploy internal + deploy USB
-#                                        + verify file hashes on both copies.
+#   ./deploy-ps5.sh build   [PS5_HOST]   Build (make package, no deploy) +
+#                                        deploy to the single live copy
+#                                        (/mnt/usb1/PPSA98515) + verify hashes.
 #   ./deploy-ps5.sh deploy  [PS5_HOST]   Deploy the current local release files
 #                                        (no rebuild) + verify file hashes.
 #   ./deploy-ps5.sh verify  [PS5_HOST]   Check the RUNNING build from the latest
@@ -22,10 +26,11 @@
 # (highlight the app -> Options -> Close) or reboot the PS5, then launch a
 # game, then run `./deploy-ps5.sh verify`. A file-hash match alone does NOT
 # prove the running process reloaded the new binary -- only the EDEN_BUILD
-# line in the log proves it.
+# line in the log proves it. NOTE: if the app is running, uploading eboot.bin
+# fails with "550 Text file busy" -- quit the app first, then re-run.
 #
-# Files deployed (both copies): eboot.bin, lapy.elf, lapy-manifest.json,
-# sce_sys/param.json. State is recorded in $STATE_FILE.
+# Files deployed (single live copy /mnt/usb1/PPSA98515): eboot.bin, lapy.elf,
+# lapy-manifest.json, sce_sys/param.json. State is recorded in $STATE_FILE.
 set -euo pipefail
 
 REPO=/data/code/EglantinePS5
@@ -35,22 +40,24 @@ PORT=2121
 HOST="${2:-192.168.88.33}"
 STATE_FILE=/home/swizard/deploy-state.json
 FILES="eboot.bin lapy.elf lapy-manifest.json sce_sys/param.json"
-BASES="/data/homebrew/PPSA98515 /mnt/usb1/homebrew/PPSA98515"
+# THE single live location. The app runs from here (proved by Text file busy).
+# Do NOT add the other two copies back -- they are stale spares, not deploy targets.
+BASES="/mnt/usb1/PPSA98515"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 info() { echo "== $*"; }
 
 # --- embedded python: FTP upload + hash verify + log fetch -----------------
 # Usage: python3 - <upload|verify|fetch-log> <host> <port> <args...>
-#   upload <local_dir> <file1> [file2...]   -> uploads to the USB copy
-#   verify <local_dir> <file1> [file2...]   -> hashes both copies, prints JSON
+#   upload <local_dir> <file1> [file2...]   -> uploads to the live copy
+#   verify <local_dir> <file1> [file2...]   -> hashes the live copy, prints JSON
 #   fetch-log <remote> <local>              -> downloads one file
 ftp_py() {
 python3 - "$@" <<'PYEOF'
 import ftplib, hashlib, json, sys, os
 
 mode, host, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
-BASES = ["/data/homebrew/PPSA98515", "/mnt/usb1/homebrew/PPSA98515"]
+BASES = ["/mnt/usb1/PPSA98515"]
 
 def sha_file(path):
     h = hashlib.sha256()
@@ -72,8 +79,8 @@ if mode == "upload":
     try:
         for f in files:
             with open(os.path.join(local_dir, f), "rb") as fh:
-                ftp.storbinary("STOR /mnt/usb1/homebrew/PPSA98515/" + f, fh)
-            print("uploaded USB:", f)
+                ftp.storbinary("STOR /mnt/usb1/PPSA98515/" + f, fh)
+            print("uploaded to live copy:", f)
     finally:
         ftp.quit()
 elif mode == "verify":
@@ -133,25 +140,27 @@ PYEOF
 }
 
 do_build() {
-    info "building + installing to internal copy (PS5 $HOST:$PORT)"
+    info "building (make package; no deploy -- the script uploads to the one live copy)"
     info "this runs inside container $CONTAINER; keep it in tmux"
     local log="/tmp/eglantine-deploy-$(date +%Y%m%d-%H%M%S).log"
     docker exec "$CONTAINER" bash -lc \
-        "cd $REPO && make install PS5_HOST=$HOST PS5_PORT=$PORT" 2>&1 | tee "$log"
+        "cd $REPO && make package" 2>&1 | tee "$log"
     info "build log: $log"
-    # make install rebuilds/repackages eboot.bin, so hashes are taken AFTER it.
+    # make package rebuilds/repackages eboot.bin, so hashes are taken AFTER it.
     for f in $FILES; do
         [ -f "$RELEASE/$f" ] || die "missing local file after build: $RELEASE/$f"
     done
 }
 
-do_usb_upload() {
-    info "uploading to USB copy (/mnt/usb1/homebrew/PPSA98515)"
+do_upload() {
+    info "uploading to the single live copy (/mnt/usb1/PPSA98515)"
+    info "if the app is running, eboot.bin fails with '550 Text file busy' --"
+    info "fully quit the app on the PS5 first, then re-run."
     ftp_py upload "$HOST" "$PORT" "$RELEASE" $FILES
 }
 
 do_verify_files() {
-    info "verifying file hashes on BOTH copies vs local post-build files"
+    info "verifying file hashes on the live copy vs local post-build files"
     local out
     out=$(ftp_py verify "$HOST" "$PORT" "$RELEASE" $FILES)
     echo "$out"
@@ -169,7 +178,7 @@ if bad:
     for b in bad:
         print("  -", b)
     sys.exit(1)
-print("FILE VERIFY OK: all 4 files match on both copies.")
+print("FILE VERIFY OK: all 4 files match on the live copy.")
 PYEOF
 }
 
@@ -223,21 +232,21 @@ cmd="${1:-help}"
 case "$cmd" in
     build)
         do_build
-        do_usb_upload
+        do_upload
         do_verify_files
         record_state
         echo
-        echo "DEPLOY DONE (files verified on both copies)."
+        echo "DEPLOY DONE (files verified on the live copy)."
         echo "NOW: fully quit the emulator app on the PS5 (Options -> Close)"
         echo "or reboot the PS5, launch a game, then run:"
         echo "  ./deploy-ps5.sh verify $HOST"
         ;;
     deploy)
-        do_usb_upload
+        do_upload
         do_verify_files
         record_state
         echo
-        echo "DEPLOY DONE (files verified on both copies)."
+        echo "DEPLOY DONE (files verified on the live copy)."
         echo "NOW: fully quit the emulator app / reboot the PS5, launch a game,"
         echo "then run:  ./deploy-ps5.sh verify $HOST"
         ;;
@@ -246,11 +255,11 @@ case "$cmd" in
         ;;
     full)
         do_build
-        do_usb_upload
+        do_upload
         do_verify_files
         record_state
         echo
-        echo "BUILD+DEPLOY DONE (files verified on both copies)."
+        echo "BUILD+DEPLOY DONE (files verified on the live copy)."
         echo "NOW: fully quit the emulator app / reboot the PS5, launch a game,"
         echo "then run:  ./deploy-ps5.sh verify $HOST"
         ;;
