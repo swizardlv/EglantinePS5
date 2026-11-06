@@ -319,16 +319,23 @@ ASTC 解码约 1.6–1.7 ms，BC 编码约 0.5–0.6 ms，BC 解码约 0.3 ms；
 
 ### 6.4 未做的实测（明说）
 
-- **Eden 全量编译验证**：2026-11-07 05:40 起在容器内跑 `make package`
-  （tmux `offline-pack-build`，日志 `/home/swizard/offline-pack-build.log`）。
-  此前未做的原因：253 主机上无系统级 Vulkan/fmt/Boost/SDL 开发头文件，
-  直接在主机编会失败；正确做法是在容器（`gallant_banach`，已挂载
-  `/data/code`）内编，scratch 缓存按工作树分开（`owner` 校验只拒绝
-  复用另一工作树的缓存，另起一套是预期行为）。加载器头文件本身已
-  独立编译 + 单测通过（§6.1 补记：`offline_pack_loader.h`  standalone
-  测试 + 真实包互通测试全过）；`texture_cache.h` 的补丁经逐行人工
-  核对（字段名/类型均与 `image_base.h`、`image_info.h`、`types.h`
-  逐一对照）。全量编译是并入主线前的必做项。
+- **Eden 全量编译验证：已通过**（2026-11-07 05:40–06:50，容器内
+  `make package`，`BUILD_EXIT:0`；日志
+  `/home/swizard/offline-pack-build.log`）。此前未做的原因：253 主机
+  上无系统级 Vulkan/fmt/Boost/SDL 开发头文件，直接在主机编会失败；
+  正确做法是在容器（`gallant_banach`，已挂载 `/data/code`）内编，
+  scratch 缓存按工作树分开（`owner` 校验只拒绝复用另一工作树的缓存，
+  另起一套是预期行为）。产物：`build/release/PPSA98515/eboot.bin`
+ （78,595,902 字节，sha256 `6d109098d2ebd1fc…`），`EDEN_BUILD
+  scm_rev=5921ae1952`（即本分支子模块头）。加载器已编进包内：
+  eboot 中含 `TryUploadPackedAstc` 符号与三条加载器日志字符串
+  （`Offline pack loaded: {} textures from {}` 等）。自测全部 PASS
+  （含 GPU worker / DMA fence / JIT / worker topology）。
+  加载器头文件本身也已独立编译 + 单测通过（`offline_pack_loader.h`
+  standalone 测试 + 真实包互通测试全过）；`texture_cache.h` 的补丁
+  经逐行人工核对（字段名/类型均与 `image_base.h`、`image_info.h`、
+  `types.h` 逐一对照）。**未部署**（本分支不部署；09:23 部署的是
+  主线 build56，见定时任务）。
 - **headless Eden Linux 原生构建未跑**：同上原因，未谎报。
 - **PS5 实测未做**：无真实捕获数据（§1.2）；包的加载器不存在，
   故无 PS5 帧率/内存对比。
