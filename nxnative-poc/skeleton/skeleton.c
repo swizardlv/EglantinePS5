@@ -874,7 +874,10 @@ present_solid_colour(struct context *c)
    report("RADV display: vkGetDisplayModePropertiesKHR rc=%d modes=%u first_refresh_hz=%.3f",
           (int)result, count,
           count > 0 ? modes[0].parameters.refreshRate / 1000.0 : 0.0);
-   if (result != VK_SUCCESS || count == 0) {
+   /* VK_INCOMPLETE means the fixed modes[2] array was filled and more modes
+      exist; modes[0] is valid, so accept it like the physical-device
+      enumerate above (line ~560). */
+   if ((result != VK_SUCCESS && result != VK_INCOMPLETE) || count == 0) {
       check(false, "RADV display: its modes");
       return false;
    }
