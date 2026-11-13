@@ -193,6 +193,9 @@ private:
     /// Bounds of every address ever rejected (never shrinks): a quick test for invalidations.
     std::atomic<VAddr> rejected_lowest{~VAddr{}};
     std::atomic<VAddr> rejected_highest{};
+    /// Removals that freed programs; RefreshStages looks the stages up again after each one.
+    std::atomic<u64> removal_serial{};
+    u64 seen_removal_serial{};
 };
 
 } // namespace VideoCommon
