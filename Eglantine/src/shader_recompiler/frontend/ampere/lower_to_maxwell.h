@@ -4059,6 +4059,16 @@ inline LoweredProgram LowerToMaxwellWith(std::span<const Instruction> code, u32 
             break;
         }
         default:
+            // Unknown opcodes are usually trailing constant/jump-table data, not real
+            // instructions. End the lowered program at the last real instruction with a Maxwell
+            // EXIT instead of rejecting the whole pipeline (and skipping every draw that uses it).
+            if (index >= 16 && !result.instructions.empty()) {
+                result.instructions.push_back(0xe30000000007000fULL);
+                auto truncated = finish(index - 1);
+                if (truncated) {
+                    return truncated;
+                }
+            }
             return fail(index, "unsupported native opcode");
         }
         if (!operand_error.empty()) return fail(index, operand_error);
@@ -4075,6 +4085,21 @@ inline LoweredProgram LowerToMaxwellWith(std::span<const Instruction> code, u32 
                     pending.output_target = static_cast<u32>(result.instructions.size());
             }
             result.instructions.insert(result.instructions.end(), pressure.suffix.begin(), pressure.suffix.end());
+        }
+    }
+    // A computed-branch shader whose main body already EXITed may have no closing self-branch
+    // in the captured range (it was cut at the constant data). Its library functions are all in
+    // `code` by now, so appending an EXIT completes a valid Maxwell program.
+    if (main_exited && code.size() > 16 && !result.instructions.empty()) {
+        const u32 last = static_cast<u32>(code.size() - 1);
+        const bool pending = std::any_of(relocations.begin(), relocations.end(),
+            [&](const Relocation& relocation) { return relocation.target > last; });
+        if (!pending) {
+            result.instructions.push_back(0xe30000000007000fULL);
+            auto truncated = finish(last);
+            if (truncated) {
+                return truncated;
+            }
         }
     }
     return fail(static_cast<u32>(code.size()), main_exited ? "native program lacks captured library return" : "native program has no unconditional EXIT");

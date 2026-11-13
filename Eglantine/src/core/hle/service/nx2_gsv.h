@@ -1528,6 +1528,15 @@ inline bool Nx2VideoTraceEnabled() {
     return enabled;
 }
 
+// EDEN_NX2_VIDEO_OVERLAY=0 disables the intro-movie overlay paint.
+inline bool Nx2VideoOverlayEnabled() {
+    static const bool enabled = [] {
+        const char* value = std::getenv("EDEN_NX2_VIDEO_OVERLAY");
+        return value == nullptr || value[0] != '0';
+    }();
+    return enabled;
+}
+
 // Native memory and images handed out by the Switch 2 graphics server (gsv 111/114/423/429/315),
 // shared with the vi2 session so presents can find an image's memory. Command meanings follow
 // the shared changes.patch (IGraphicsSupervisor), re-checked against title 4's SDK.
@@ -1566,6 +1575,15 @@ struct Nx2NativeObjects {
     std::map<u32, Memory> memories;
     std::map<u32, Image> images;
     std::optional<VideoTrace> last_video_write;
+    // Intro movies are painted into a solid-colour present image by the game and shown by a
+    // hardware video overlay on the console. Headless has no overlay: keep the newest decoded
+    // frame as pitch-linear RGBA and paint it into the present image at composite time.
+    std::vector<u8> video_frame_rgba;
+    u32 video_frame_width{};
+    u32 video_frame_height{};
+    u64 video_frame_pitch{};
+    std::chrono::steady_clock::time_point video_frame_written{};
+    u32 present_image{};
     u32 next_memory{1};
     u32 next_image{1};
 
@@ -2159,6 +2177,9 @@ private:
         std::optional<Nx2NativeObjects::VideoTrace> video_trace;
         Nx2ImageLayout layout{};
         u32 image_format{};
+        std::vector<u8> overlay_rgba;
+        u32 overlay_width{}, overlay_height{};
+        u64 overlay_pitch{};
         {
             std::scoped_lock lk{m_objects->mutex};
             const auto image = m_objects->images.find(image_id);
@@ -2174,8 +2195,17 @@ private:
             parent_offset = memory->second.parent_offset + image->second.offset;
             layout = Nx2CalculateImageLayout(image->second.preference.data());
             image_format = image->second.preference[6];
+            m_objects->present_image = image_id;
             if (Nx2VideoTraceEnabled()) {
                 video_trace = m_objects->last_video_write;
+            }
+            if (Nx2VideoOverlayEnabled() && !m_objects->video_frame_rgba.empty() &&
+                std::chrono::steady_clock::now() - m_objects->video_frame_written <
+                    std::chrono::milliseconds{500}) {
+                overlay_rgba = m_objects->video_frame_rgba;
+                overlay_width = m_objects->video_frame_width;
+                overlay_height = m_objects->video_frame_height;
+                overlay_pitch = m_objects->video_frame_pitch;
             }
         }
         auto& registry = Nvidia::Devices::Nx2GpuMemoryRegistry::Get();
@@ -2204,6 +2234,32 @@ private:
             LOG_WARNING(Service, "nx2:vi2 present: image {} at {:#x} has no device mapping",
                         image_id, address);
             return;
+        }
+        if (!overlay_rgba.empty() && system.ApplicationProcess() != nullptr) {
+            const u32 width = (std::min)(overlay_width, layout.width);
+            const u32 height = (std::min)(overlay_height, layout.height);
+            const u64 dst_pitch = layout.pitch;
+            const size_t copy_bytes = static_cast<size_t>(
+                (std::min)(dst_pitch, static_cast<u64>(width) * 4));
+            std::vector<u8> linear(static_cast<size_t>(layout.size), u8{});
+            for (u32 y = 0; y < height; ++y) {
+                const size_t src = static_cast<size_t>(y) * static_cast<size_t>(overlay_pitch);
+                const size_t dst = static_cast<size_t>(y) * static_cast<size_t>(dst_pitch);
+                if (src + copy_bytes <= overlay_rgba.size() &&
+                    dst + copy_bytes <= linear.size()) {
+                    std::copy_n(overlay_rgba.data() + src, copy_bytes, linear.data() + dst);
+                }
+            }
+            std::vector<u8> tiled(static_cast<size_t>(layout.size), u8{});
+            Tegra::Texture::SwizzleTexture(tiled, linear, 4, static_cast<u32>(dst_pitch / 4),
+                                           layout.height, 1, 4, 0, 1, true);
+            system.ApplicationMemory().WriteBlock(address, tiled.data(), tiled.size());
+            system.GPU().InvalidateRegion(*device, tiled.size());
+            if (m_presents % 120 == 0) {
+                LOG_INFO(Service,
+                         "nx2:vi2 video overlay: present #{} image {} {}x{} pitch {:#x} -> {:#x}",
+                         m_presents, image_id, width, height, dst_pitch, address);
+            }
         }
         u32 crop_width = layout.width;
         u32 crop_height = layout.height;
@@ -3285,6 +3341,18 @@ private:
     // Writes a decoded frame into an output image; returns the size the frame reports.
     std::pair<u32, u32> WriteImage(Tegra::Host1x::Nx2VideoDecoder* decoder, u32 image_id,
                                    const Decoded& frame, std::vector<u8>& bytes) {
+        const auto remember_overlay = [&](std::vector<u8> rgba, u32 width, u32 height,
+                                          u64 pitch) {
+            if (!Nx2VideoOverlayEnabled() || system.ApplicationProcess() == nullptr) {
+                return;
+            }
+            std::scoped_lock lk{m_objects->mutex};
+            m_objects->video_frame_rgba = std::move(rgba);
+            m_objects->video_frame_width = width;
+            m_objects->video_frame_height = height;
+            m_objects->video_frame_pitch = pitch;
+            m_objects->video_frame_written = std::chrono::steady_clock::now();
+        };
         const auto image_mutex = m_objects->DecoderMutex(image_id);
         std::unique_lock<std::mutex> image_lock;
         if (image_mutex) {
@@ -3366,6 +3434,10 @@ private:
                     Nvidia::Devices::Nx2GpuMemoryRegistry::Get().DeviceAddressOf(address)) {
                 system.GPU().InvalidateRegion(*device, m_tiled.size());
             }
+            // bytes is already pitch-linear RGBA8 (the block-linear branch renders Rgba8).
+            const size_t overlay_size = (std::min)(bytes.size(), layout.pitch * height);
+            remember_overlay(std::vector<u8>(bytes.begin(), bytes.begin() + overlay_size), width,
+                             height, layout.pitch);
             trace_write();
             return {width, height};
         }
@@ -3380,6 +3452,13 @@ private:
         // The game samples the image on the GPU: drop the texture cache's copy of the old frame.
         if (const auto device = Nvidia::Devices::Nx2GpuMemoryRegistry::Get().DeviceAddressOf(address)) {
             system.GPU().InvalidateRegion(*device, layout.size);
+        }
+        {
+            // NV12 cannot be a present layer: make a second RGBA copy for the overlay.
+            std::vector<u8> overlay(layout.pitch * height, u8{});
+            decoder->Render(*frame.picture, Tegra::Host1x::Nx2PictureFormat::Rgba8, width, height,
+                            layout.pitch, 0, overlay);
+            remember_overlay(std::move(overlay), width, height, layout.pitch);
         }
         trace_write();
         // A 428/426 that came in while this frame was written didn't see it: relayout it here.
