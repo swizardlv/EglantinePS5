@@ -417,10 +417,12 @@ void ShaderCache::RememberRejection(VAddr addr, GPUVAddr gpu_addr) {
         return;
     }
     rejected_native.emplace(addr, std::move(rejection));
-    page_filter.Mark(addr, 1); // InnerInvalidation reaches InvalidatePagesInRegion for it
+    // Track writes to every page the program was captured from, not just its first byte.
+    const VAddr window_end = addr + (std::max)(rejection.bytes.size(), size_t{1});
+    page_filter.Mark(addr, window_end - addr);
     rejected_lowest.store((std::min)(rejected_lowest.load(std::memory_order_relaxed), addr),
                           std::memory_order_relaxed);
-    rejected_highest.store((std::max)(rejected_highest.load(std::memory_order_relaxed), addr),
+    rejected_highest.store((std::max)(rejected_highest.load(std::memory_order_relaxed), window_end),
                            std::memory_order_relaxed);
 }
 
@@ -482,7 +484,12 @@ void ShaderCache::InvalidatePagesInRegion(VAddr addr, size_t size) {
         addr <= rejected_highest.load(std::memory_order_relaxed)) {
         std::scoped_lock lock{rejected_mutex};
         boost::unordered::erase_if(rejected_native, [&](const auto& rejected) {
-            return rejected.first >= addr && rejected.first < addr_end;
+            // Guest shader code is often written into the middle of the program after its
+            // first (empty) lowering. Matching only the start address left those rejections
+            // permanent; any write that overlaps the captured window must retire them.
+            const VAddr begin = rejected.first;
+            const VAddr end = begin + (std::max)(rejected.second.bytes.size(), size_t{1});
+            return end > addr && begin < addr_end;
         });
     }
     const u64 page_end = (addr_end + YUZU_PAGESIZE - 1) >> YUZU_PAGEBITS;

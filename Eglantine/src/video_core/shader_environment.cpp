@@ -1069,6 +1069,21 @@ ComputeEnvironment::ComputeEnvironment(Tegra::Engines::KeplerCompute& kepler_com
     if (kepler_compute->IsNativeMode()) {
         initial_offset = sizeof(sph);
         is_proprietary_driver = true;
+        static std::atomic<u32> diag_shown{};
+        if (diag_shown.fetch_add(1, std::memory_order_relaxed) < 8) {
+            const GPUVAddr shader_address = program_base_ + start_address_;
+            std::array<u64, 4> at_base{}, at_shader{};
+            gpu_memory_.ReadBlockUnsafe(program_base_, at_base.data(), sizeof(at_base));
+            gpu_memory_.ReadBlockUnsafe(shader_address, at_shader.data(), sizeof(at_shader));
+            LOG_INFO(HW_GPU,
+                     "NATIVE_ADDR_DIAG: base={:#x} program_start={:#x} shader={:#x} sph={:#x} "
+                     "mapped_base={} mapped_shader={} base=[{:016x} {:016x}] "
+                     "shader=[{:016x} {:016x}]",
+                     program_base_, start_address_, shader_address, sizeof(sph),
+                     gpu_memory_.IsFullyMappedRange(program_base_, sizeof(at_base)),
+                     gpu_memory_.IsFullyMappedRange(shader_address, sizeof(at_shader)),
+                     at_base[0], at_base[1], at_shader[0], at_shader[1]);
+        }
         InitializeNativeCode(std::move(lowered_native_), 0, false, cache_v2);
         start_address = sizeof(sph);
     }
