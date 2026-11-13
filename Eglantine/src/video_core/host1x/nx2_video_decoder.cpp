@@ -226,7 +226,10 @@ void Nx2VideoDecoder::Render(const Nx2Picture& picture, Nx2PictureFormat format,
     const u64 needed = format == Nx2PictureFormat::Nv12
                            ? chroma_offset + pitch * ((u64{height} + 1) / 2)
                            : pitch * height;
-    const u64 min_pitch = format == Nx2PictureFormat::Nv12 ? ((u64{width} + 1) / 2) * 2 : 0;
+    // sws_scale writes width*4 bytes per row for the packed formats. A smaller pitch overlaps
+    // rows and runs past `out`, so reject it instead of corrupting the heap.
+    const u64 min_pitch = format == Nx2PictureFormat::Nv12 ? ((u64{width} + 1) / 2) * 2
+                                                           : u64{width} * 4;
     if (width == 0 || height == 0 || pitch < min_pitch || out.size() < needed) {
         return;
     }

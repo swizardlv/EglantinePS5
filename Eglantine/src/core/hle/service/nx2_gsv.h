@@ -2200,6 +2200,7 @@ private:
                 video_trace = m_objects->last_video_write;
             }
             if (Nx2VideoOverlayEnabled() && !m_objects->video_frame_rgba.empty() &&
+                m_objects->video_frame_pitch >= u64{m_objects->video_frame_width} * 4 &&
                 std::chrono::steady_clock::now() - m_objects->video_frame_written <
                     std::chrono::milliseconds{500}) {
                 overlay_rgba = m_objects->video_frame_rgba;
@@ -3346,6 +3347,12 @@ private:
             if (!Nx2VideoOverlayEnabled() || system.ApplicationProcess() == nullptr) {
                 return;
             }
+            // Never keep a frame whose packed RGBA rows do not fit: a short buffer would be
+            // copied into the present image with out-of-bounds source reads.
+            if (width == 0 || height == 0 || pitch < u64{width} * 4 ||
+                rgba.size() < static_cast<size_t>(pitch * height)) {
+                return;
+            }
             std::scoped_lock lk{m_objects->mutex};
             m_objects->video_frame_rgba = std::move(rgba);
             m_objects->video_frame_width = width;
@@ -3454,11 +3461,14 @@ private:
             system.GPU().InvalidateRegion(*device, layout.size);
         }
         {
-            // NV12 cannot be a present layer: make a second RGBA copy for the overlay.
-            std::vector<u8> overlay(layout.pitch * height, u8{});
+            // NV12 cannot be a present layer: make a second RGBA copy for the overlay. The NV12
+            // pitch is one byte per pixel; a packed RGBA row needs four. Reusing layout.pitch
+            // here made sws_scale write width*4 bytes every pitch bytes and overrun the buffer.
+            const u64 rgba_pitch = Common::AlignUp(u64{width} * 4, 64);
+            std::vector<u8> overlay(static_cast<size_t>(rgba_pitch * height), u8{});
             decoder->Render(*frame.picture, Tegra::Host1x::Nx2PictureFormat::Rgba8, width, height,
-                            layout.pitch, 0, overlay);
-            remember_overlay(std::move(overlay), width, height, layout.pitch);
+                            rgba_pitch, 0, overlay);
+            remember_overlay(std::move(overlay), width, height, rgba_pitch);
         }
         trace_write();
         // A 428/426 that came in while this frame was written didn't see it: relayout it here.
