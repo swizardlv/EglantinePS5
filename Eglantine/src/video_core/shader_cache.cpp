@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <cstdlib>
 #include <exception>
@@ -158,7 +159,8 @@ bool ShaderCache::RefreshStages(std::array<u64, 6>& unique_hashes) try {
             return false;
         }
         const ShaderInfo* shader_info{TryGet(*cpu_shader_addr)};
-        if (!shader_info && native && IsRejected(*cpu_shader_addr)) {
+        if (!shader_info && native && IsRejected(*cpu_shader_addr) &&
+            !RecheckRejection(*cpu_shader_addr)) {
             // A rejected program fails the same way every time it is bound: skip its draws
             // without rethrowing (two C++ throws each time cost ~1-2% of the GPU thread).
             maxwell3d->GetNativeMacroEngine().native_execution_failed = true;
@@ -176,7 +178,7 @@ bool ShaderCache::RefreshStages(std::array<u64, 6>& unique_hashes) try {
                                         {}, shader_cache_v2};
                 shader_info = MakeShaderInfo(env, *cpu_shader_addr);
             } catch (const Shader::Exception&) {
-                RememberRejection(*cpu_shader_addr);
+                RememberRejection(*cpu_shader_addr, shader_addr);
                 // Once per program: which stage slot it is bound to, its header and the slot's
                 // registers (to tell how a pipeline with task/mesh programs is set up).
                 static std::unordered_set<GPUVAddr> described;
@@ -277,7 +279,8 @@ const ShaderInfo* ShaderCache::ComputeShader() {
                                                      *kepler_compute, *gpu_memory, bank, offset);
                                              }))
             throw Shader::Ampere::TrapGuardError{};
-    } else if (kepler_compute->IsNativeMode() && IsRejected(*cpu_shader_addr)) {
+    } else if (kepler_compute->IsNativeMode() && IsRejected(*cpu_shader_addr) &&
+               !RecheckRejection(*cpu_shader_addr)) {
         // A rejected program fails the same way on every dispatch. GetGraphicsEnvironments
         // skips those draws without rethrowing; doing the same here avoids two C++ throws, a
         // mutex-guarded insert and an exception_ptr for each dispatch of the program. The
@@ -285,6 +288,7 @@ const ShaderInfo* ShaderCache::ComputeShader() {
         return nullptr;
     } else {
         try {
+            RecheckRejection(*cpu_shader_addr);
             RethrowIfRejected(*cpu_shader_addr);
             const Nx2Profile::Scope profile_scope{Nx2Profile::Zone::ShaderCapture};
             ComputeEnvironment env{*kepler_compute, *gpu_memory, program_base, qmd.program_start, {},
@@ -294,7 +298,7 @@ const ShaderInfo* ShaderCache::ComputeShader() {
             // Constants can become valid on the next dispatch; do not cache this rejection.
             throw;
         } catch (const Shader::Exception&) {
-            RememberRejection(*cpu_shader_addr);
+            RememberRejection(*cpu_shader_addr, shader_addr);
             throw;
         }
     }
@@ -319,7 +323,7 @@ const ShaderInfo* ShaderCache::ComputeShader() {
 void ShaderCache::RethrowIfRejected(VAddr addr) {
     std::scoped_lock lock{rejected_mutex};
     if (const auto it = rejected_native.find(addr); it != rejected_native.end()) {
-        std::rethrow_exception(it->second);
+        std::rethrow_exception(it->second.error);
     }
 }
 
@@ -328,14 +332,91 @@ bool ShaderCache::IsRejected(VAddr addr) {
     return rejected_native.contains(addr);
 }
 
-void ShaderCache::RememberRejection(VAddr addr) {
+namespace {
+/// On by default on the console; EDEN_NX2_REJECT_RECHECK=0 turns it off.
+bool RejectRecheckEnabled() {
+    static const bool enabled = [] {
+        const char* const value = std::getenv("EDEN_NX2_REJECT_RECHECK");
+        return value == nullptr || value[0] != '0';
+    }();
+    return enabled;
+}
+} // namespace
+
+bool ShaderCache::RecheckRejection(VAddr addr) {
+    if (!RejectRecheckEnabled()) {
+        return false;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    GPUVAddr gpu_addr{};
+    std::vector<u8> before;
+    std::chrono::steady_clock::time_point made{};
+    {
+        std::scoped_lock lock{rejected_mutex};
+        const auto it = rejected_native.find(addr);
+        if (it == rejected_native.end() ||
+            now - it->second.checked < std::chrono::milliseconds{250}) {
+            return false;
+        }
+        it->second.checked = now;
+        gpu_addr = it->second.gpu_addr;
+        before = it->second.bytes;
+        made = it->second.made;
+    }
+    std::vector<u8> after;
+    {
+        size_t length = 0x2000;
+        while (length > 0x80 && !gpu_memory->IsFullyMappedRange(gpu_addr, length)) {
+            length /= 2;
+        }
+        after.resize(length);
+        gpu_memory->ReadBlockUnsafe(gpu_addr, after.data(), length);
+    }
+    const size_t length = (std::min)(before.size(), after.size());
+    const auto mismatch = std::mismatch(before.begin(), before.begin() + length, after.begin());
+    if (mismatch.first == before.begin() + length && before.size() == after.size()) {
+        return false;
+    }
+    {
+        std::scoped_lock lock{rejected_mutex};
+        rejected_native.erase(addr);
+    }
+    const size_t offset = static_cast<size_t>(mismatch.first - before.begin());
+    LOG_INFO(HW_GPU,
+             "REJECT_RECHECK: program {:#x} changed {} ms after rejection at +{:#x} "
+             "({:02x} -> {:02x}), lowering again",
+             gpu_addr,
+             std::chrono::duration_cast<std::chrono::milliseconds>(now - made).count(), offset,
+             offset < length ? before[offset] : u8{}, offset < length ? after[offset] : u8{});
+    return true;
+}
+
+void ShaderCache::RememberRejection(VAddr addr, GPUVAddr gpu_addr) {
+    Rejection rejection{};
+    rejection.error = std::current_exception();
+    rejection.gpu_addr = gpu_addr;
+    if (RejectRecheckEnabled()) {
+        size_t length = 0x2000;
+        while (length > 0x80 && !gpu_memory->IsFullyMappedRange(gpu_addr, length)) {
+            length /= 2;
+        }
+        rejection.bytes.resize(length);
+        gpu_memory->ReadBlockUnsafe(gpu_addr, rejection.bytes.data(), length);
+        rejection.made = rejection.checked = std::chrono::steady_clock::now();
+        u64 hash = 14695981039346656037ULL;
+        for (const u8 byte : rejection.bytes) {
+            hash = (hash ^ byte) * 1099511628211ULL;
+        }
+        LOG_INFO(HW_GPU, "REJECT_RECHECK: remembered program {:#x} window={:#x} hash={:016x}",
+                 gpu_addr, length, hash);
+    }
     std::scoped_lock lock{rejected_mutex};
     if (rejected_native.contains(addr)) {
         // Called from a catch block: keep the first exception for that address instead of
         // capturing and inserting a new one on every rejected dispatch.
         return;
     }
-    rejected_native.emplace(addr, std::current_exception());
+    rejected_native.emplace(addr, std::move(rejection));
     page_filter.Mark(addr, 1); // InnerInvalidation reaches InvalidatePagesInRegion for it
     rejected_lowest.store((std::min)(rejected_lowest.load(std::memory_order_relaxed), addr),
                           std::memory_order_relaxed);
