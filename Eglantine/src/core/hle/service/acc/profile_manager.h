@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include <mutex>
+
 #include <array>
 #include <optional>
 
@@ -71,6 +73,7 @@ static_assert(sizeof(ProfileBase) == 0x38, "ProfileBase is an invalid size");
 class ProfileManager {
 public:
     ProfileManager();
+    [[nodiscard]] std::unique_lock<std::mutex> Lock() { return std::unique_lock{access_mutex}; }
     ~ProfileManager();
 
     Result AddUser(const ProfileInfo& user);
@@ -123,6 +126,7 @@ private:
     std::optional<std::size_t> AddToProfiles(const ProfileInfo& profile);
     void RemoveAllProfiles();
 
+    std::mutex access_mutex;
     bool is_save_needed{};
     std::array<ProfileInfo, MAX_USERS> profiles{};
     std::array<ProfileInfo, MAX_USERS> stored_opened_profiles{};

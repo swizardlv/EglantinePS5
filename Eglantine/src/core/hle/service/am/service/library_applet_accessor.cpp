@@ -5,6 +5,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "common/settings.h"
+#include "core/core.h"
+#include "core/frontend/applets/profile_select.h"
 #include "core/hle/service/acc/profile_manager.h"
 #include "core/hle/service/am/applet_data_broker.h"
 #include "core/hle/service/am/applet_manager.h"
@@ -174,7 +176,8 @@ Result ILibraryAppletAccessor::PopOutData(Out<SharedPointer<IStorage>> out_stora
         else if (is_front_app) caller_applet->lifecycle_manager.RequestFocusStateChangedNotification(system.Kernel());
     }
 
-    if (m_applet->applet_id == AppletId::ProfileSelect && *out_storage) {
+    if (m_applet->applet_id == AppletId::ProfileSelect && *out_storage &&
+        !system.GetFrontendAppletHolder().GetFrontendAppletSet().profile_select->PreservesCancellation()) {
         auto impl = (*out_storage)->GetImpl();
 
         if (impl->GetSize() == sizeof(Frontend::UiReturnArg)) {

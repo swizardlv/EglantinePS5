@@ -25,6 +25,8 @@ public:
 
     virtual ~ProfileSelectApplet();
 
+    virtual bool PreservesCancellation() const { return false; }
+
     virtual void SelectProfile(SelectProfileCallback callback,
                                const ProfileSelectParameters& parameters) const = 0;
 };

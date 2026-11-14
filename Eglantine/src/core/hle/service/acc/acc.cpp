@@ -600,6 +600,8 @@ protected:
         rb.Push(ResultSuccess);
     }
 
+    std::unique_lock<std::mutex> LockService() noexcept override { return profile_manager.Lock(); }
+
     ProfileManager& profile_manager;
     Common::UUID user_id{}; ///< The user id this profile refers to.
 };
@@ -773,6 +775,8 @@ private:
     }
 
     std::shared_ptr<EnsureTokenIdCacheAsyncInterface> ensure_token_id{};
+    std::unique_lock<std::mutex> LockService() noexcept override { return profile_manager->Lock(); }
+
     std::shared_ptr<ProfileManager> profile_manager;
 };
 
@@ -1635,6 +1639,10 @@ public:
         RegisterHandlers(functions);
     }
 };
+
+std::unique_lock<std::mutex> Module::Interface::LockService() noexcept {
+    return profile_manager->Lock();
+}
 
 void LoopProcess(Core::System& system) {
     auto module = std::make_shared<Module>();

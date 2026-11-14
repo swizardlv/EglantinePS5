@@ -23,6 +23,9 @@ public:
                            const char* name);
         ~Interface() override;
 
+        std::shared_ptr<ProfileManager> GetProfileManager() const { return profile_manager; }
+        std::unique_lock<std::mutex> LockService() noexcept override;
+
         void GetUserCount(HLERequestContext& ctx);
         void GetUserExistence(HLERequestContext& ctx);
         void ListAllUsers(HLERequestContext& ctx);

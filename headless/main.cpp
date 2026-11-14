@@ -131,6 +131,10 @@ extern "C" bool eden_jit_shared;  // headless/dynarmic/jit_group_support.inc
 #include "video_core/frame_gen/lossless_dll.h"
 #endif
 #include "profiles.h"
+#include "profile_applet.h"
+#include "profile_backend.h"
+#include "core/hle/service/acc/acc.h"
+#include "core/hle/service/acc/profile_manager.h"
 #include "stop_limit.h"
 #include "core/device_memory.h"
 #include "core/hle/kernel/k_memory_layout.h"
@@ -1491,6 +1495,33 @@ int main(int argc, char** argv) {
                     if (pad) applets.controller = std::make_unique<Eden::PadControllerApplet>(system.HIDCore(), *pad);
                     // A game's error dialog: logged and closed, so the game carries on.
                     applets.error = std::make_unique<Eden::LoggedErrorApplet>();
+                    auto account_manager = [&system] {
+                        auto service = system.ServiceManager().GetService<Service::Account::Module::Interface>("acc:u0");
+                        return service ? service->GetProfileManager() : nullptr;
+                    };
+                    Eden::ProfileAppletText profile_text;
+                    const auto profile_language = Settings::values.language_index.GetValue();
+                    if (profile_language == Settings::Language::Chinese ||
+                        profile_language == Settings::Language::ChineseSimplified)
+                        profile_text = {u"新建用户：请输入新名字", u"选择用户：请输入名字", u"输入新名字会创建新用户"};
+                    else if (profile_language == Settings::Language::Taiwanese ||
+                             profile_language == Settings::Language::ChineseTraditional)
+                        profile_text = {u"建立使用者：請輸入新名稱", u"選擇使用者：請輸入名稱", u"輸入新名稱會建立使用者"};
+                    applets.profile_select = std::make_unique<Eden::SystemProfileApplet>(
+                        [account_manager] {
+                            auto manager = account_manager();
+                            return manager ? Eden::ReadProfileUsers(*manager) :
+                                std::vector<Eden::SystemProfileApplet::User>{};
+                        },
+                        [account_manager](const std::string& name) -> std::optional<Common::UUID> {
+                            auto manager = account_manager();
+                            if (!manager) return std::nullopt;
+                            const auto id = Eden::CreateProfileUser(*manager, name);
+                            Eden::Report("profile", id ? "Created an account for the game's save data" :
+                                                        "Account creation failed; existing accounts preserved");
+                            return id;
+                        }, Eden::AskSystemKeyboard, std::move(profile_text));
+
                     // A game's text entry: the PS5's own on-screen keyboard.
                     applets.software_keyboard = std::make_unique<Eden::SystemKeyboardApplet>(Eden::AskSystemKeyboard);
                     system.GetFrontendAppletHolder().SetFrontendAppletSet(std::move(applets));
