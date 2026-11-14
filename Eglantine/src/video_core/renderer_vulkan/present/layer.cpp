@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <stdexcept>
 #include <variant>
 #include "video_core/present.h"
 #include "video_core/renderer_vulkan/present/anti_alias_pass.h"
@@ -92,8 +93,11 @@ void Layer::ConfigureDraw(const Device& device, PresentPushConstants* out_push_c
                           VkSampler sampler, size_t image_index,
                           const Tegra::FramebufferConfig& framebuffer,
                           const Layout::FramebufferLayout& layout) {
-    const auto texture_info = rasterizer.AccelerateDisplay(
-        framebuffer, framebuffer.address + framebuffer.offset, framebuffer.stride);
+    std::optional<FramebufferTextureInfo> texture_info;
+    if (!framebuffer.cpu_pixels) {
+        texture_info = rasterizer.AccelerateDisplay(
+            framebuffer, framebuffer.address + framebuffer.offset, framebuffer.stride);
+    }
     const u32 texture_width = texture_info ? texture_info->width : framebuffer.width;
     const u32 texture_height = texture_info ? texture_info->height : framebuffer.height;
     const u32 scaled_width = texture_info ? texture_info->scaled_width : texture_width;
@@ -104,10 +108,12 @@ void Layer::ConfigureDraw(const Device& device, PresentPushConstants* out_push_c
                                             Service::Nvnflinger::LayerStackId::Recording)) == 0;
 
     RefreshResources(device, framebuffer);
-    SetAntiAliasPass(device);
+    if (!framebuffer.cpu_pixels) {
+        SetAntiAliasPass(device);
 #ifdef HAS_RESHADE
-    SetPostProcessPass(device, is_applet);
+        SetPostProcessPass(device, is_applet);
 #endif
+    }
 
     // Finish any pending renderpass
     scheduler.RequestOutsideRenderPassOperationContext();
@@ -124,7 +130,8 @@ void Layer::ConfigureDraw(const Device& device, PresentPushConstants* out_push_c
     VkImageView source_image_view =
         texture_info ? texture_info->image_view : *raw_image_views[image_index];
 
-    const bool already_upscaled = texture_info && texture_info->already_upscaled;
+    const bool already_upscaled =
+        framebuffer.cpu_pixels || (texture_info && texture_info->already_upscaled);
     // FXAA or SMAA on top of NVIDIA DLSS's image only blurs it.
     const bool anti_aliased = already_upscaled || (texture_info && texture_info->anti_aliased);
     if (!anti_aliased) {
@@ -354,7 +361,8 @@ void Layer::UpdateRawImage(const Tegra::FramebufferConfig& framebuffer, size_t i
     const u64 image_offset = GetRawImageOffset(framebuffer, image_index);
 
     const DAddr framebuffer_addr = framebuffer.address + framebuffer.offset;
-    const u8* const host_ptr = device_memory.GetPointer<u8>(framebuffer_addr);
+    const u8* const host_ptr = framebuffer.cpu_pixels ? nullptr
+                                                    : device_memory.GetPointer<u8>(framebuffer_addr);
 
     // TODO(Rodrigo): Read this from HLE
     constexpr u32 block_height_log2 = 4;
@@ -362,7 +370,14 @@ void Layer::UpdateRawImage(const Tegra::FramebufferConfig& framebuffer, size_t i
     const u64 linear_size{GetSizeInBytes(framebuffer)};
     const u64 tiled_size{Tegra::Texture::CalculateSize(
         true, bytes_per_pixel, framebuffer.stride, framebuffer.height, 1, block_height_log2, 0)};
-    if (host_ptr) {
+    if (framebuffer.cpu_pixels) {
+        ASSERT(framebuffer.cpu_pixels->width == framebuffer.width &&
+               framebuffer.cpu_pixels->height == framebuffer.height);
+        if (!framebuffer.cpu_pixels->CopyPacked(mapped_span.subspan(image_offset, linear_size))) {
+            throw std::runtime_error("Invalid CPU video framebuffer");
+        }
+        buffer.Flush();
+    } else if (host_ptr) {
         Tegra::Texture::UnswizzleTexture(
             mapped_span.subspan(image_offset, linear_size), std::span(host_ptr, tiled_size),
             bytes_per_pixel, framebuffer.width, framebuffer.height, 1, block_height_log2, 0, 1, framebuffer.native_tiling);

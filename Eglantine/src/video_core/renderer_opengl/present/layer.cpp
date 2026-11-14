@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <stdexcept>
 #include "video_core/framebuffer_config.h"
 #include "video_core/present.h"
 #include "video_core/renderer_opengl/gl_blit_screen.h"
@@ -45,7 +46,7 @@ GLuint Layer::ConfigureDraw(std::array<GLfloat, 3 * 2>& out_matrix,
     GLuint texture = info.display_texture;
 
     auto anti_aliasing = filters.get_anti_aliasing();
-    if (anti_aliasing != Settings::AntiAliasing::None) {
+    if (!framebuffer.cpu_pixels && anti_aliasing != Settings::AntiAliasing::None) {
         glEnablei(GL_SCISSOR_TEST, 0);
         auto viewport_width = Settings::values.resolution_info.ScaleUp(framebuffer_texture.width);
         auto viewport_height = Settings::values.resolution_info.ScaleUp(framebuffer_texture.height);
@@ -69,7 +70,9 @@ GLuint Layer::ConfigureDraw(std::array<GLfloat, 3 * 2>& out_matrix,
 
     glDisablei(GL_SCISSOR_TEST, 0);
 
-    if (filters.get_scaling_filter() == Settings::ScalingFilter::Fsr || filters.get_scaling_filter() == Settings::ScalingFilter::Fsr3) {
+    if (!framebuffer.cpu_pixels &&
+        (filters.get_scaling_filter() == Settings::ScalingFilter::Fsr ||
+         filters.get_scaling_filter() == Settings::ScalingFilter::Fsr3)) {
         if (!fsr || fsr->NeedsRecreation(layout.screen)) {
             fsr.emplace(layout.screen.GetWidth(), layout.screen.GetHeight());
         }
@@ -119,10 +122,12 @@ FramebufferTextureInfo Layer::PrepareRenderTarget(const Tegra::FramebufferConfig
 
 FramebufferTextureInfo Layer::LoadFBToScreenInfo(const Tegra::FramebufferConfig& framebuffer) {
     const VAddr framebuffer_addr{framebuffer.address + framebuffer.offset};
-    const auto accelerated_info =
-        rasterizer.AccelerateDisplay(framebuffer, framebuffer_addr, framebuffer.stride);
-    if (accelerated_info) {
-        return *accelerated_info;
+    if (!framebuffer.cpu_pixels) {
+        const auto accelerated_info =
+            rasterizer.AccelerateDisplay(framebuffer, framebuffer_addr, framebuffer.stride);
+        if (accelerated_info) {
+            return *accelerated_info;
+        }
     }
 
     // Reset the screen info's display texture to its own permanent texture
@@ -140,8 +145,15 @@ FramebufferTextureInfo Layer::LoadFBToScreenInfo(const Tegra::FramebufferConfig&
     const u32 bytes_per_pixel{VideoCore::Surface::BytesPerBlock(pixel_format)};
     const u64 size_in_bytes{Tegra::Texture::CalculateSize(
         true, bytes_per_pixel, framebuffer.stride, framebuffer.height, 1, block_height_log2, 0)};
-    const u8* const host_ptr{device_memory.GetPointer<u8>(framebuffer_addr)};
-    if (host_ptr) {
+    const u8* const host_ptr = framebuffer.cpu_pixels ? nullptr
+                                                    : device_memory.GetPointer<u8>(framebuffer_addr);
+    if (framebuffer.cpu_pixels) {
+        ASSERT(framebuffer.cpu_pixels->width == framebuffer.width &&
+               framebuffer.cpu_pixels->height == framebuffer.height);
+        if (!framebuffer.cpu_pixels->CopyPacked(gl_framebuffer_data)) {
+            throw std::runtime_error("Invalid CPU video framebuffer");
+        }
+    } else if (host_ptr) {
         const std::span<const u8> input_data(host_ptr, size_in_bytes);
         Tegra::Texture::UnswizzleTexture(gl_framebuffer_data, input_data, bytes_per_pixel,
                                          framebuffer.width, framebuffer.height, 1,
