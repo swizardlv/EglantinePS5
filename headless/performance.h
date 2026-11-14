@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <vector>
@@ -244,9 +245,13 @@ inline std::atomic<bool> cpu_write_defer{true};
 struct DeferredWrite {
     unsigned long long address, end;
 };
+struct DeferredWriteBatch {
+    std::vector<DeferredWrite> writes;
+};
 struct DeferredQueue {
     std::mutex mutex;
     std::vector<DeferredWrite> writes;
+    std::vector<std::shared_ptr<const DeferredWriteBatch>> replaying;
     unsigned taken = 0;  // Takes so far, under mutex.
 };
 inline std::array<DeferredQueue, kGuestCores> deferred_queues;
@@ -279,13 +284,36 @@ inline void DeferWrite(unsigned long long address, unsigned long long size, unsi
     }
     gpu_dirty_pending.store(true, std::memory_order_release);
 }
-inline std::vector<DeferredWrite> TakeDeferredWrites(unsigned core) {
-    std::vector<DeferredWrite> taken;
+// Keep taken writes visible until replay has invalidated their caches or collected them in the
+// dirty manager. A failed replay retains its batch: dropping it would allow a stale download.
+inline std::shared_ptr<const DeferredWriteBatch> TakeDeferredWrites(unsigned core) {
     auto& queue = deferred_queues[core];
     std::scoped_lock lock{queue.mutex};
-    taken.swap(queue.writes);
+    if (queue.writes.empty()) return {};
+    auto batch = std::make_shared<DeferredWriteBatch>();
+    queue.replaying.push_back(batch);
+    batch->writes.swap(queue.writes);
     ++queue.taken;
-    return taken;
+    return batch;
+}
+inline void CompleteDeferredWrites(unsigned core,
+                                   const std::shared_ptr<const DeferredWriteBatch>& batch) {
+    auto& queue = deferred_queues[core];
+    std::scoped_lock lock{queue.mutex};
+    std::erase(queue.replaying, batch);
+}
+// Snapshot before enumerating dirty managers so a write handed from replay to Collect cannot
+// disappear between the two snapshots. Callbacks and landing waits run after these locks release.
+inline std::vector<DeferredWrite> SnapshotDeferredWrites() {
+    std::vector<DeferredWrite> writes;
+    for (auto& queue : deferred_queues) {
+        std::scoped_lock lock{queue.mutex};
+        writes.insert(writes.end(), queue.writes.begin(), queue.writes.end());
+        for (const auto& batch : queue.replaying) {
+            writes.insert(writes.end(), batch->writes.begin(), batch->writes.end());
+        }
+    }
+    return writes;
 }
 // A read of a GPU-tracked page whose texture cache lock is held answers "no download" without
 // waiting, as an empty area the read does not remember, so the next read checks again. A first read

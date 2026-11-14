@@ -51,7 +51,7 @@ cmake -S "$eden" -B "$scratch/build" -G Ninja \
     -DSDL_UNIX_CONSOLE_BUILD=ON -DSDL_X11=OFF -DSDL_WAYLAND=OFF \
     -DSDL_OPENGL=OFF -DSDL_OPENGLES=OFF -DSDL_RENDER=OFF -DSDL_GPU=OFF
 python3 -B "$root/headless/check_slab_lifetime.py" "$scratch/source/src/core/hle/kernel/slab_helpers.h"
-cmake --build "$scratch/build" --target eden-romfs-check eden-devices-check eden-scalar-check eden-memory-check eden-ryujinx-check eden-mods-check eden-nup-check eden-shader-cache-check eden-settings-check eden-patch-library-check eden-update-check eden-update-files-check eden-profiles-check eden-save-sync-check -j "${EDEN_BUILD_JOBS:-$(nproc)}"
+cmake --build "$scratch/build" --target eden-romfs-check eden-devices-check eden-scalar-check eden-memory-check eden-ryujinx-check eden-mods-check eden-nup-check eden-shader-cache-check eden-settings-check eden-patch-library-check eden-update-check eden-update-files-check eden-profiles-check eden-deferred-cpu-writes-check eden-save-sync-check -j "${EDEN_BUILD_JOBS:-$(nproc)}"
 python3 -B "$root/tools/check-pipeline-cache.py"
 python3 -B "$root/tools/check-macro-native.py"
 python3 -B "$root/tools/check-heap-growth.py"
@@ -69,6 +69,7 @@ python3 -B "$root/headless/check_audio_shutdown.py" "$scratch/build/headless/cor
 "$scratch/build/bin/eden-update-check"
 "$scratch/build/bin/eden-update-files-check"
 "$scratch/build/bin/eden-profiles-check"
+"$scratch/build/bin/eden-deferred-cpu-writes-check"
 "$scratch/build/bin/eden-save-sync-check"
 "$scratch/build/bin/eden-mods-check"
 "$scratch/build/bin/eden-nup-check" "$root/fixtures/nup"

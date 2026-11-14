@@ -1064,7 +1064,9 @@ void MemoryManager::FlushCaching() {
         ::Eden::Performance::deferred_replay = true;
         SCOPE_EXIT { ::Eden::Performance::deferred_replay = false; };
         for (unsigned core = 0; core < ::Eden::Performance::kGuestCores; ++core) {
-            for (const auto& write : ::Eden::Performance::TakeDeferredWrites(core)) {
+            const auto batch = ::Eden::Performance::TakeDeferredWrites(core);
+            if (!batch) continue;
+            for (const auto& write : batch->writes) {
                 if (rasterizer->OnCPUWrite(write.address, write.end - write.address)) {
                     // Collect represents 32 x 64-byte blocks, not an entire device page.
                     constexpr u64 region_size = 1ULL << (Core::DEVICE_PAGEBITS - 1);
@@ -1076,6 +1078,7 @@ void MemoryManager::FlushCaching() {
                     }
                 }
             }
+            ::Eden::Performance::CompleteDeferredWrites(core, batch);
         }
     }
     // Flush from the invalidate accumulator

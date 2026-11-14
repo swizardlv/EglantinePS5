@@ -17,7 +17,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
+#include "headless/performance.h"
 #include "common/page_table.h"
+#include "common/scope_exit.h"
+#include "core/gpu_dirty_memory_manager.h"
 #include "core/core.h"
 #include "core/device_memory.h"
 #include "core/hle/kernel/k_process.h"
@@ -386,9 +389,14 @@ struct ReadCheckScope {
 
 template <class R, class C>
 struct BasicFixture {
+    static Core::DeviceMemory& InitializeMemory(Core::System& system) {
+        REQUIRE(system.Initialize());
+        return system.DeviceMemory();
+    }
+
     ScopedSystemTestContext context;
     Core::System system;
-    Core::DeviceMemory physical;
+    Core::DeviceMemory& physical{InitializeMemory(system)};
     Tegra::MaxwellDeviceMemoryManager device{physical};
     Tegra::GPU gpu{system, false, false};
     Null::RasterizerNull rasterizer{gpu};
@@ -400,7 +408,6 @@ struct BasicFixture {
     u8* bytes{};
 
     BasicFixture() {
-        system.Initialize();
         process = std::make_unique<Kernel::KProcess>(system.Kernel());
         auto& table = process->GetPageTable().GetImpl();
         table.Resize(24, 12);
@@ -1041,6 +1048,87 @@ TEST_CASE("Read downloads keep CPU writes made while they were on their way", "[
     REQUIRE(f.bytes[0x10210] == 0x12);
     REQUIRE(f.bytes[0x10fff] == 0x12);
     REQUIRE_FALSE(Access::Pending(*f.cache, 0x20000, 0x1000));
+}
+
+TEST_CASE("Read downloads preserve deferred CPU writes across replay handoff",
+          "[buffer_ports][deferred_cpu_writes]") {
+    namespace Perf = Eden::Performance;
+    Fixture f;
+    REQUIRE(Perf::SnapshotDeferredWrites().empty());
+    std::shared_ptr<const Perf::DeferredWriteBatch> batch;
+    SCOPE_EXIT {
+        if (batch) Perf::CompleteDeferredWrites(0, batch);
+        if (auto queued = Perf::TakeDeferredWrites(0)) Perf::CompleteDeferredWrites(0, queued);
+    };
+    f.cache->SetPendingCpuWrites([&](const auto& callback) { f.gpu.ForEachPendingCpuWrite(callback); });
+    const auto id = Access::Add(*f.cache, 0x20000, 0x10000);
+    auto& gpu_bytes = Access::Get(*f.cache, id).bytes;
+    std::ranges::fill(gpu_bytes, 0x12);
+    Access::Dirty(*f.cache, 0x20000, 0x1000);
+    f.cache->DownloadMemoryForRead(0x20000, 0x1000);
+    Perf::DeferWrite(0x20100, 0x40, 0);
+    std::memset(f.bytes + 0x10100, 0xee, 0x40);
+
+    SECTION("queued before replay") {}
+    SECTION("taken but not yet collected") {
+        batch = Perf::TakeDeferredWrites(0);
+        REQUIRE(batch);
+    }
+    SECTION("collected before replay completes") {
+        batch = Perf::TakeDeferredWrites(0);
+        REQUIRE(batch);
+        f.system.GetGPUDirtyMemoryManager()[0].Collect(0x20100, 0x40);
+        Perf::CompleteDeferredWrites(0, batch);
+        batch.reset();
+        REQUIRE(Perf::SnapshotDeferredWrites().empty());
+    }
+
+    f.cache->FinishReadDownloads(0x20000, 0x1000);
+    REQUIRE(f.bytes[0x100ff] == 0x12);
+    REQUIRE(std::all_of(f.bytes + 0x10100, f.bytes + 0x10140, [](u8 b) { return b == 0xee; }));
+    REQUIRE(f.bytes[0x10140] == 0x12);
+    REQUIRE(f.bytes[0x10fff] == 0x12);
+
+    if (batch) Perf::CompleteDeferredWrites(0, batch);
+    batch.reset();
+    if (auto queued = Perf::TakeDeferredWrites(0)) Perf::CompleteDeferredWrites(0, queued);
+    std::function<void(PAddr, size_t)> applied = [](auto, auto) {};
+    f.system.GatherGPUDirtyMemory(applied);
+    REQUIRE(Perf::SnapshotDeferredWrites().empty());
+    // After CPU writes are applied, a new GPU write may replace them.
+    std::ranges::fill(gpu_bytes, 0x34);
+    Access::Dirty(*f.cache, 0x20000, 0x1000);
+    f.cache->DownloadMemoryForRead(0x20000, 0x1000);
+    f.cache->FinishReadDownloads(0x20000, 0x1000);
+    REQUIRE(std::all_of(f.bytes + 0x10000, f.bytes + 0x11000, [](u8 b) { return b == 0x34; }));
+}
+
+TEST_CASE("Deferred CPU writes exclude exact bytes without holding queue locks in callbacks",
+          "[buffer_ports][deferred_cpu_writes]") {
+    namespace Perf = Eden::Performance;
+    Fixture f;
+    REQUIRE(Perf::SnapshotDeferredWrites().empty());
+    SCOPE_EXIT {
+        if (auto queued = Perf::TakeDeferredWrites(0)) Perf::CompleteDeferredWrites(0, queued);
+    };
+    f.cache->SetPendingCpuWrites([&](const auto& callback) { f.gpu.ForEachPendingCpuWrite(callback); });
+    const auto id = Access::Add(*f.cache, 0x20000, 0x10000);
+    std::ranges::fill(Access::Get(*f.cache, id).bytes, 0x12);
+    Access::Dirty(*f.cache, 0x20000, 0x1000);
+    f.cache->DownloadMemoryForRead(0x20000, 0x1000);
+    Perf::DeferWrite(0x2003f, 2, 0);
+    std::memset(f.bytes + 0x1003f, 0xee, 2);
+    f.cache->FinishReadDownloads(0x20000, 0x1000);
+    for (size_t i = 0; i < 0x1000; ++i) {
+        REQUIRE(f.bytes[0x10000 + i] == ((i == 0x3f || i == 0x40) ? 0xee : 0x12));
+    }
+    unsigned callbacks = 0;
+    f.gpu.ForEachPendingCpuWrite([&](DAddr, size_t) {
+        ++callbacks;
+        Perf::DeferWrite(0x20200, 16, 0);
+    });
+    REQUIRE(callbacks == 1);
+    REQUIRE(Perf::SnapshotDeferredWrites().size() == 2);
 }
 
 TEST_CASE("Newer bytes that guest memory doesn't hold yet land the read downloads under them first",

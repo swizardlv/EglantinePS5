@@ -20,6 +20,7 @@
 #include <vector>
 #include <utility>
 
+#include "headless/performance.h"
 #include "common/assert.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
@@ -186,7 +187,12 @@ struct GPU::Impl {
     }
 
     void ForEachPendingCpuWrite(const std::function<void(DAddr, size_t)>& callback) {
+        // Snapshot before the dirty managers: replay can hand a deferred write to them meanwhile.
+        const auto deferred = Eden::Performance::SnapshotDeferredWrites();
         std::scoped_lock lock{applying_writes_mutex};
+        for (const auto& write : deferred) {
+            callback(write.address, write.end - write.address);
+        }
         for (auto& manager : system.GetGPUDirtyMemoryManager()) {
             manager.ForEachPending(callback);
         }
