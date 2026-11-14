@@ -15,6 +15,46 @@ using Shader::Ampere::ProgramCaptureState;
 
 constexpr Instruction EXIT{{0x0000794d, 0, 0x03800000, 0}};
 
+TEST_CASE("Ampere reachable unknown instructions cannot truncate a program",
+          "[video_core][ampere][capture_regression]") {
+    std::vector<Instruction> code(16, Instruction{{0x00007918, 0, 0, 0}});
+    code.push_back({{0x00007fff, 0, 0, 0}});
+    code.push_back(EXIT);
+    const auto rejected = LowerToMaxwell(code);
+    REQUIRE_FALSE(rejected);
+    CHECK(rejected.error == "unsupported native opcode");
+    CHECK(rejected.error_offset == 16 * sizeof(Instruction));
+    CHECK(rejected.instructions.empty());
+
+    code[16] = {{0x00007918, 0, 0, 0}};
+    const auto complete = LowerToMaxwell(code);
+    REQUIRE(complete);
+    CHECK(complete.source_size == code.size() * sizeof(Instruction));
+    code.pop_back();
+    const auto unterminated = LowerToMaxwell(code);
+    REQUIRE_FALSE(unterminated);
+    CHECK(unterminated.error == "native program has no unconditional EXIT");
+}
+
+TEST_CASE("Ampere incomplete computed branches cannot invent an EXIT",
+          "[video_core][ampere][capture_regression]") {
+    std::vector<Instruction> code(17, Instruction{{0x00007918, 0, 0, 0}});
+    code[1] = {{0x00097802, 0x30, 0x00000f00, 0}}; // return PC in R9
+    code[2] = {{0x00007944, 0x10, 0x03c00000, 0}}; // call instruction 4
+    code[3] = EXIT;
+    code[4] = {{0x00007949, 0xffffffb0, 0x0383ffff, 0}}; // BRX, absolute native PC
+    code[5] = {{0x09007950, 0xffffffa0, 0x03c3ffff, 0}}; // RET R9
+    const auto incomplete = LowerToMaxwell(code);
+    REQUIRE_FALSE(incomplete);
+    CHECK(incomplete.error == "native program lacks captured library return");
+    CHECK(incomplete.instructions.empty());
+
+    code.push_back({{0x00007947, 0xfffffff0, 0x0383ffff, 0}}); // closing self-branch
+    const auto complete = LowerToMaxwell(code);
+    REQUIRE(complete);
+    CHECK(complete.source_size == code.size() * sizeof(Instruction));
+}
+
 // Lowered Maxwell words whose top bits (above `shift`) are `opcode`.
 template <typename Program>
 size_t CountMaxwell(const Program& lowered, u64 opcode, u32 shift) {
