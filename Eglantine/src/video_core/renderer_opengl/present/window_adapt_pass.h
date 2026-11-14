@@ -38,6 +38,7 @@ private:
     OGLSampler sampler;
     OGLProgram vert;
     OGLProgram frag;
+    OGLProgram video_key_frag;
     OGLBuffer vertex_buffer;
 
     // GPU address of the vertex buffer

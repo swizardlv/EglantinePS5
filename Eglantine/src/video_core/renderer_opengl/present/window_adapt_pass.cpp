@@ -10,6 +10,7 @@
 #include "common/settings.h"
 #include "video_core/framebuffer_config.h"
 #include "video_core/host_shaders/opengl_present_vert.h"
+#include "video_core/host_shaders/present_video_key_frag.h"
 #include "video_core/renderer_opengl/gl_device.h"
 #include "video_core/renderer_opengl/gl_shader_manager.h"
 #include "video_core/renderer_opengl/gl_shader_util.h"
@@ -24,6 +25,7 @@ WindowAdaptPass::WindowAdaptPass(const Device& device_, OGLSampler&& sampler_,
     : device(device_), sampler(std::move(sampler_)) {
     vert = CreateProgram(HostShaders::OPENGL_PRESENT_VERT, GL_VERTEX_SHADER);
     frag = CreateProgram(frag_source, GL_FRAGMENT_SHADER);
+    video_key_frag = CreateProgram(HostShaders::PRESENT_VIDEO_KEY_FRAG, GL_FRAGMENT_SHADER);
 
     // Generate VBO handle for drawing
     vertex_buffer.Create();
@@ -64,8 +66,6 @@ void WindowAdaptPass::DrawToFramebuffer(ProgramManager& program_manager, std::li
     glBindFramebuffer(GL_READ_FRAMEBUFFER, old_read_fb);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, old_draw_fb);
 
-    program_manager.BindPresentPrograms(vert.handle, frag.handle);
-
     glDisable(GL_FRAMEBUFFER_SRGB);
     glViewportIndexedf(0, 0.0f, 0.0f, static_cast<GLfloat>(layout.width),
                        static_cast<GLfloat>(layout.height));
@@ -98,12 +98,16 @@ void WindowAdaptPass::DrawToFramebuffer(ProgramManager& program_manager, std::li
     glClear(GL_COLOR_BUFFER_BIT);
 
     for (size_t i = 0; i < layer_count; i++) {
+        const bool video_key = framebuffers[i].blending == Tegra::BlendMode::VideoKey;
+        program_manager.BindPresentPrograms(vert.handle,
+                                           video_key ? video_key_frag.handle : frag.handle);
         switch (framebuffers[i].blending) {
         case Tegra::BlendMode::Opaque:
         default:
             glDisablei(GL_BLEND, 0);
             break;
         case Tegra::BlendMode::Premultiplied:
+        case Tegra::BlendMode::VideoKey:
             glEnablei(GL_BLEND, 0);
             glBlendFuncSeparatei(0, GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ZERO);
             break;

@@ -44,9 +44,10 @@ GLuint Layer::ConfigureDraw(std::array<GLfloat, 3 * 2>& out_matrix,
     FramebufferTextureInfo info = PrepareRenderTarget(framebuffer);
     auto crop = Tegra::NormalizeCrop(framebuffer, info.width, info.height);
     GLuint texture = info.display_texture;
+    const bool video_key = framebuffer.blending == Tegra::BlendMode::VideoKey;
 
     auto anti_aliasing = filters.get_anti_aliasing();
-    if (!framebuffer.cpu_pixels && anti_aliasing != Settings::AntiAliasing::None) {
+    if (!framebuffer.cpu_pixels && !video_key && anti_aliasing != Settings::AntiAliasing::None) {
         glEnablei(GL_SCISSOR_TEST, 0);
         auto viewport_width = Settings::values.resolution_info.ScaleUp(framebuffer_texture.width);
         auto viewport_height = Settings::values.resolution_info.ScaleUp(framebuffer_texture.height);
@@ -70,7 +71,7 @@ GLuint Layer::ConfigureDraw(std::array<GLfloat, 3 * 2>& out_matrix,
 
     glDisablei(GL_SCISSOR_TEST, 0);
 
-    if (!framebuffer.cpu_pixels &&
+    if (!framebuffer.cpu_pixels && !video_key &&
         (filters.get_scaling_filter() == Settings::ScalingFilter::Fsr ||
          filters.get_scaling_filter() == Settings::ScalingFilter::Fsr3)) {
         if (!fsr || fsr->NeedsRecreation(layout.screen)) {
