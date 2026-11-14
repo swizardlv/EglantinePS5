@@ -58,6 +58,10 @@ public:
     }
     bool IsShuttingDown() const;
 
+    Core::System& GetSystem() const {
+        return system;
+    }
+
     static constexpr bool HAS_FLUSH_INVALIDATION = true;
 
     inline size_t GetID() const noexcept {

@@ -34,6 +34,11 @@
 #include "common/fs/path_util.h"
 #include "common/logging.h"
 #include "common/settings.h"
+#include "common/scm_rev.h"
+#include "core/core.h"
+#include "core/hle/kernel/k_process.h"
+#include "core/hle/service/nvdrv/devices/nx2_stub_device.h"
+#include "core/memory.h"
 #include <ranges>
 #include "shader_recompiler/environment.h"
 #include "shader_recompiler/exception.h"
@@ -521,6 +526,131 @@ Tegra::Texture::TICEntry GenericEnvironment::ReadTextureInfo(GPUVAddr tic_addr, 
 
 namespace {
 
+class NativeReadVerification {
+public:
+    static bool Enabled(Tegra::MemoryManager& memory) {
+        static const bool enabled = [] {
+            const char* value = std::getenv("EDEN_NX2_SHADER_READ_VERIFY");
+            return value && std::string_view{value} == "1";
+        }();
+        return enabled && memory.GetSystem().GetApplicationProcessProgramID() == 0x0400245021D2C000;
+    }
+
+    explicit NativeReadVerification(GPUVAddr program_) : program{program_} {}
+
+    void Read(Tegra::MemoryManager& memory, GPUVAddr address, void* destination, size_t size) {
+        constexpr u64 PageLimit = 65536;
+        if (!Enabled(memory) || size == 0 || size > 0x1000 || (address & 0xfff) + size > 0x1000) {
+            memory.ReadBlock(address, destination, size);
+            return;
+        }
+        const u64 ticket = totals.attempts.fetch_add(1, std::memory_order_relaxed);
+        if (ticket >= PageLimit) {
+            memory.ReadBlock(address, destination, size);
+            return;
+        }
+        auto& system = memory.GetSystem();
+        if (ticket == 0) {
+            LOG_INFO(HW_GPU, "SHADER_READ_VERIFY enabled title={:016x} build={} page_limit={} "
+                            "report_limit=32 (24 changed/mismatch, 8 zero); CPU pointers only; "
+                            "changes may include concurrent guest writes or queued mappings",
+                     system.GetApplicationProcessProgramID(), Common::g_scm_rev, PageLimit);
+        }
+        auto& registry = Service::Nvidia::Devices::Nx2GpuMemoryRegistry::Get();
+        bool busy_before{}, busy_after{};
+        const auto cpu_address = registry.TryCpuAddressOfGpu(address, size, busy_before);
+        auto* process = system.ApplicationProcess();
+        const auto cpu_pointer = [&](std::optional<u64> at) -> const u8* {
+            if (!process || !at || (*at & 0xfff) + size > 0x1000) {
+                return nullptr;
+            }
+            // Resolve identity only: dereferencing a separate CPU mapping can fault PS5 fastmem.
+            return process->GetMemory().GetPointerSilent(Common::ProcessAddress{*at});
+        };
+        const u8* const cpu_before_pointer = cpu_pointer(cpu_address);
+        const u8* const gpu_before_pointer = memory.GetPointer(address);
+        const auto device_before = memory.GpuToCpuAddress(address);
+        memory.ReadBlockUnsafe(address, gpu_before.data(), size);
+
+        memory.ReadBlock(address, destination, size);
+
+        const auto cpu_address_after = registry.TryCpuAddressOfGpu(address, size, busy_after);
+        const u8* const cpu_after_pointer = cpu_pointer(cpu_address_after);
+        const u8* const gpu_after_pointer = memory.GetPointer(address);
+        const auto device_after = memory.GpuToCpuAddress(address);
+        const auto* after = static_cast<const u8*>(destination);
+        const bool known = cpu_before_pointer && cpu_after_pointer;
+        const bool registry_busy = busy_before || busy_after;
+        const bool mapping_changed = (!registry_busy && cpu_address != cpu_address_after) ||
+                                     (known && cpu_before_pointer != cpu_after_pointer) ||
+                                     gpu_before_pointer != gpu_after_pointer || device_before != device_after;
+        const bool pointer_mismatch = known && (cpu_before_pointer != gpu_before_pointer ||
+                                                cpu_after_pointer != gpu_after_pointer);
+        const bool read_changed = std::memcmp(gpu_before.data(), after, size) != 0;
+        const bool zero = std::all_of(after, after + size, [](u8 byte) { return byte == 0; });
+        totals.checked.fetch_add(1, std::memory_order_relaxed);
+        totals.unknown.fetch_add(!known, std::memory_order_relaxed);
+        totals.busy.fetch_add(registry_busy, std::memory_order_relaxed);
+        totals.mapping_changed.fetch_add(mapping_changed, std::memory_order_relaxed);
+        totals.pointer_mismatch.fetch_add(pointer_mismatch, std::memory_order_relaxed);
+        totals.read_changed.fetch_add(read_changed, std::memory_order_relaxed);
+        totals.zero.fetch_add(zero, std::memory_order_relaxed);
+        const bool changed = mapping_changed || pointer_mismatch || read_changed;
+        const bool report = changed ? totals.changed_reports.fetch_add(1, std::memory_order_relaxed) < 24
+                                   : zero && totals.zero_reports.fetch_add(1, std::memory_order_relaxed) < 8;
+        if (report) {
+            const auto hash = [size](const void* bytes) {
+                return Common::CityHash64(static_cast<const char*>(bytes), size);
+            };
+            reports.push_back(fmt::format(
+                "gpu={:#x} bytes={:#x} cpu={:#x}->{:#x} device={:#x}->{:#x} "
+                "gpu_ptr={:#x}->{:#x} cpu_ptr={:#x}->{:#x} known={} registry_busy={} "
+                "mapping_changed={} pointer_mismatch={} read_changed={} zero={} "
+                "gpu_before={:016x} captured={:016x}",
+                address, size, cpu_address.value_or(0), cpu_address_after.value_or(0),
+                device_before.value_or(0), device_after.value_or(0),
+                reinterpret_cast<uintptr_t>(gpu_before_pointer), reinterpret_cast<uintptr_t>(gpu_after_pointer),
+                reinterpret_cast<uintptr_t>(cpu_before_pointer), reinterpret_cast<uintptr_t>(cpu_after_pointer),
+                known, registry_busy, mapping_changed, pointer_mismatch, read_changed, zero,
+                hash(gpu_before.data()), hash(after)));
+        }
+        if (report || ticket == 0 || (ticket + 1) % 4096 == 0) {
+            LOG_INFO(HW_GPU, "SHADER_READ_VERIFY summary checked={} unknown={} registry_busy={} "
+                            "mapping_changed={} pointer_mismatch={} read_changed={} zero={} "
+                            "budget_exhausted={}",
+                     totals.checked.load(), totals.unknown.load(), totals.busy.load(),
+                     totals.mapping_changed.load(), totals.pointer_mismatch.load(),
+                     totals.read_changed.load(), totals.zero.load(), ticket + 1 == PageLimit);
+        }
+    }
+
+    void Finish(std::span<const Shader::Ampere::Instruction> code) {
+        if (reports.empty()) return;
+        const u64 hash = code.empty() ? 0 : Shader::Ampere::NativeProgramKey(code);
+        for (const auto& report : reports) {
+            LOG_WARNING(HW_GPU, "SHADER_READ_VERIFY program={:#x} native_hash={:016x} "
+                                "hash_available={} {}", program, hash, !code.empty(), report);
+        }
+        reports.clear();
+    }
+
+    ~NativeReadVerification() {
+        Finish({});
+    }
+
+private:
+    struct Totals {
+        std::atomic<u64> attempts{}, checked{}, changed_reports{}, zero_reports{}, unknown{}, busy{},
+            mapping_changed{}, pointer_mismatch{}, read_changed{}, zero{};
+    };
+    static Totals totals;
+    GPUVAddr program;
+    std::array<u8, 0x1000> gpu_before{};
+    std::vector<std::string> reports;
+};
+
+NativeReadVerification::Totals NativeReadVerification::totals;
+
 // Reads a native program a 4 KiB page at a time instead of one 16-byte instruction at a time.
 // Each page is read with ReadBlock, so GPU-written code is flushed first, once per page instead
 // of once per instruction. An instruction that is not inside a fully mapped page is left to the
@@ -530,8 +660,17 @@ public:
     using Instruction = Shader::Ampere::Instruction;
     static constexpr GPUVAddr PageSize = 0x1000;
 
-    explicit NativeInstructionReader(Tegra::MemoryManager& gpu_memory_)
-        : gpu_memory{gpu_memory_} {}
+    explicit NativeInstructionReader(Tegra::MemoryManager& gpu_memory_,
+                                     std::optional<GPUVAddr> program = {})
+        : gpu_memory{gpu_memory_} {
+        if (program && NativeReadVerification::Enabled(gpu_memory)) {
+            verification = std::make_unique<NativeReadVerification>(*program);
+        }
+    }
+
+    void FinishVerification(std::span<const Instruction> code) {
+        if (verification) verification->Finish(code);
+    }
 
     /// Copies the instruction at `address` into `out`, loading its page first if needed.
     /// Returns false when the instruction is not inside a fully mapped page.
@@ -559,12 +698,17 @@ private:
         page_begin = address;
         page_end = address;
         if (length >= sizeof(Instruction) && gpu_memory.IsFullyMappedRange(address, length)) {
-            gpu_memory.ReadBlock(address, page.data(), length);
+            if (verification) {
+                verification->Read(gpu_memory, address, page.data(), length);
+            } else {
+                gpu_memory.ReadBlock(address, page.data(), length);
+            }
             page_end = next_page;
         }
     }
 
     Tegra::MemoryManager& gpu_memory;
+    std::unique_ptr<NativeReadVerification> verification;
     std::array<Instruction, PageSize / sizeof(Instruction)> page;
     GPUVAddr page_begin{};
     GPUVAddr page_end{};
@@ -604,7 +748,7 @@ std::shared_ptr<const LoweredNativeCode> GenericEnvironment::LowerNativeCode(
     constexpr u32 maximum_instructions = Shader::Ampere::ProgramCaptureState::MaximumInstructions;
     std::vector<Instruction> native;
     Shader::Ampere::ProgramCaptureState capture;
-    NativeInstructionReader reader{*gpu_memory};
+    NativeInstructionReader reader{*gpu_memory, program_base};
     for (u32 index = 0; index < maximum_instructions; ++index) {
         const GPUVAddr address = program_base + native_header_size + index * sizeof(Instruction);
         Instruction instruction;
@@ -636,6 +780,7 @@ std::shared_ptr<const LoweredNativeCode> GenericEnvironment::LowerNativeCode(
         }
         if (status == Shader::Ampere::ProgramCaptureState::Result::Complete) break;
     }
+    reader.FinishVerification(native);
     const std::vector<u32> verified_traps = NativeTrapOffsets(native);
     const size_t trap_count = verified_traps.empty() ? 0 : verified_traps.back() / sizeof(Instruction) + 1;
     if (trap_count && (stage != Shader::Stage::Compute ||

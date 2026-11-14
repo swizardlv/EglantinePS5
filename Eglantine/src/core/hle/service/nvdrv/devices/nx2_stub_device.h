@@ -309,6 +309,23 @@ public:
         return std::nullopt;
     }
 
+    // Diagnostic lookup: listeners can wait for the GPU while holding this mutex.
+    std::optional<u64> TryCpuAddressOfGpu(u64 gpu_address, u64 size, bool& busy) {
+        std::unique_lock lk{mutex, std::try_to_lock};
+        busy = !lk.owns_lock();
+        if (busy || size == 0) {
+            return std::nullopt;
+        }
+        for (const auto& mapping : mappings) {
+            if (gpu_address >= mapping.gpu_address &&
+                gpu_address - mapping.gpu_address < mapping.size &&
+                size <= mapping.size - (gpu_address - mapping.gpu_address)) {
+                return mapping.cpu_address + (gpu_address - mapping.gpu_address);
+            }
+        }
+        return std::nullopt;
+    }
+
     std::optional<u64> DeviceAddressOfGpu(u64 gpu_address) {
         std::optional<u64> cpu_address;
         {
