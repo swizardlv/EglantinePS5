@@ -2721,7 +2721,7 @@ std::unique_ptr<GraphicsPipeline> PipelineCache::CreateGraphicsPipeline(
         }
         env.Dump(hash, key.unique_hashes[index]);
     }
-    LOG_ERROR(Render_Vulkan, "{}", exception.what());
+    LOG_ERROR(Render_Vulkan, "Graphics pipeline {:016x}: {}", hash, exception.what());
     return nullptr;
 }
 

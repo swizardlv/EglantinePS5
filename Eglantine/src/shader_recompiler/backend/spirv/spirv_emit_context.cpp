@@ -478,6 +478,11 @@ EmitContext::EmitContext(const Profile& profile_, const RuntimeInfo& runtime_inf
       requires_coherent_image_memory{program.info.requires_coherent_image_memory},
       stage{program.stage}, texture_rescaling_index{bindings.texture_scaling_index},
       image_rescaling_index{bindings.image_scaling_index} {
+    if (stage != Stage::Compute && stage != Stage::Task && stage != Stage::Mesh &&
+        (program.info.uses_workgroup_id || program.info.uses_local_invocation_id)) {
+        throw NotImplementedException(
+            "WorkgroupId/LocalInvocationId in non-workgroup shader stage {}", stage);
+    }
     const bool is_unified{profile.unified_descriptor_binding};
     u32& uniform_binding{is_unified ? bindings.unified : bindings.uniform_buffer};
     u32& storage_binding{is_unified ? bindings.unified : bindings.storage_buffer};

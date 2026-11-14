@@ -6,6 +6,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "shader_recompiler/backend/spirv/emit_spirv.h"
+#include "shader_recompiler/backend/spirv/spirv_emit_context.h"
+#include "shader_recompiler/exception.h"
 #include "shader_recompiler/frontend/ir/abstract_syntax_list.h"
 #include "shader_recompiler/frontend/ir/basic_block.h"
 #include "shader_recompiler/frontend/ir/program.h"
@@ -120,4 +122,34 @@ TEST_CASE("SPIR-V fragment PrimitiveId declares Geometry", "[video_core][spirv][
     const std::vector<u32> without_id = Emit(Shader::Stage::Fragment, false, {});
     REQUIRE_FALSE(HasBuiltIn(without_id, BuiltInPrimitiveId));
     REQUIRE_FALSE(HasCapability(without_id, CapabilityGeometry));
+}
+
+TEST_CASE("SPIR-V workgroup built-ins reject non-workgroup stages",
+          "[video_core][spirv][workgroup_stage]") {
+    using Shader::Stage;
+    for (const Stage stage : {Stage::VertexA, Stage::VertexB, Stage::TessellationControl,
+                              Stage::TessellationEval, Stage::Geometry, Stage::Fragment,
+                              Stage::Compute, Stage::Task, Stage::Mesh}) {
+        for (const unsigned flags : {0U, 1U, 2U, 3U}) {
+            CAPTURE(stage, flags);
+            Shader::IR::Program program{};
+            program.stage = stage;
+            program.info.uses_workgroup_id = (flags & 1U) != 0;
+            program.info.uses_local_invocation_id = (flags & 2U) != 0;
+            program.workgroup_size = {1, 1, 1};
+            Shader::Profile profile{};
+            profile.supported_spirv = 0x00010600;
+            Shader::RuntimeInfo runtime{};
+            Shader::Backend::Bindings bindings{};
+            const auto emit = [&] {
+                Shader::Backend::SPIRV::EmitContext context(profile, runtime, program, bindings);
+            };
+            if (flags != 0 && stage != Stage::Compute && stage != Stage::Task &&
+                stage != Stage::Mesh) {
+                REQUIRE_THROWS_AS(emit(), Shader::NotImplementedException);
+            } else {
+                REQUIRE_NOTHROW(emit());
+            }
+        }
+    }
 }
