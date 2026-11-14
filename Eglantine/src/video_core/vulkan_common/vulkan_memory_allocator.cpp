@@ -34,6 +34,7 @@
 #include "common/memory_detect.h"
 #include <ranges>
 #include "video_core/vulkan_common/unbacked_fallback.h"
+#include "video_core/vulkan_common/memory_recovery.h"
 #include "video_core/vulkan_common/vma.h"
 #include "video_core/vulkan_common/vulkan_device.h"
 #include "video_core/vulkan_common/vulkan_memory_allocator.h"
@@ -49,8 +50,16 @@ extern "C" std::size_t eden_heap_committed(void);
 #include "video_core/gpu_logging/gpu_logging.h"
 #include "common/settings.h"
 
+extern "C" [[gnu::weak]] std::size_t eden_memory_recover(std::size_t bytes) noexcept;
+
 namespace Vulkan {
 namespace {
+
+template <typename Create>
+VkResult RecoverDeviceMemory(VkResult result, VkDeviceSize bytes, Create&& create) {
+    return RetryAfterMemoryReclaim(result, bytes, &eden_memory_recover,
+                                   std::forward<Create>(create));
+}
 
 // Helpers translating MemoryUsage to flags/usage
 
@@ -315,6 +324,10 @@ VkResult MemoryAllocator::AllocateImage(const VkImageCreateInfo &ci, bool dedica
         VmaAllocationCreateInfo relaxed = alloc_ci;
         relaxed.flags &= ~VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT;
         result = vmaCreateImage(allocator, &ci, &relaxed, &handle, &allocation, &alloc_info);
+        const u64 estimate = texels * 8;
+        result = RecoverDeviceMemory(result, estimate, [&] {
+            return vmaCreateImage(allocator, &ci, &relaxed, &handle, &allocation, &alloc_info);
+        });
     }
     if (result == VK_ERROR_OUT_OF_DEVICE_MEMORY && !huge) {
         // Still out of device memory: a real image in host memory (slow, but valid) beats one
@@ -552,6 +565,9 @@ vk::Buffer MemoryAllocator::CreateBuffer(const VkBufferCreateInfo &ci, MemoryUsa
             VmaAllocationCreateInfo relaxed = alloc_ci;
             relaxed.flags &= ~VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT;
             result = vmaCreateBuffer(allocator, &ci, &relaxed, &handle, &allocation, &alloc_info);
+            result = RecoverDeviceMemory(result, ci.size, [&] {
+                return vmaCreateBuffer(allocator, &ci, &relaxed, &handle, &allocation, &alloc_info);
+            });
         }
         vk::Check(result);
     }
@@ -617,6 +633,10 @@ vk::Buffer MemoryAllocator::CreateBuffer(const VkBufferCreateInfo &ci, MemoryUsa
         outside_budget.flags &= ~static_cast<VmaAllocationCreateFlags>(VMA_ALLOCATION_CREATE_WITHIN_BUDGET_BIT);
         created = vmaCreateBufferWithAlignment(allocator, &ci, &outside_budget, min_alignment, &handle,
                                            &allocation, &alloc_info);
+        created = RecoverDeviceMemory(created, ci.size, [&] {
+            return vmaCreateBufferWithAlignment(allocator, &ci, &outside_budget, min_alignment,
+                                                &handle, &allocation, &alloc_info);
+        });
         static std::atomic<unsigned long long> refused{0};
         const auto times = refused.fetch_add(1, std::memory_order_relaxed) + 1;
         if ((times & (times - 1)) == 0) { // the 1st, 2nd, 4th, 8th ... time
@@ -689,6 +709,9 @@ MemoryCommit MemoryAllocator::Commit(const VkMemoryRequirements &reqs, MemoryUsa
             ci3.preferredFlags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
             res = vmaAllocateMemory(allocator, &reqs, &ci3, &a, &info);
         }
+        res = RecoverDeviceMemory(res, reqs.size, [&] {
+            return vmaAllocateMemory(allocator, &reqs, &ci2, &a, &info);
+        });
     }
 
     vk::Check(res);
@@ -725,6 +748,12 @@ MemoryCommit MemoryAllocator::Commit(const vk::Buffer &buffer, MemoryUsage usage
             auto ci3 = ci2;
             ci3.preferredFlags &= ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
             res = vmaAllocateMemoryForBuffer(allocator, raw, &ci3, &a, &info);
+        }
+        if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+            const auto requirements = device.GetLogical().GetBufferMemoryRequirements(raw);
+            res = RecoverDeviceMemory(res, requirements.size, [&] {
+                return vmaAllocateMemoryForBuffer(allocator, raw, &ci2, &a, &info);
+            });
         }
     }
 
