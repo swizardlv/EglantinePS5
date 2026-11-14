@@ -619,9 +619,25 @@ std::shared_ptr<const LoweredNativeCode> GenericEnvironment::LowerNativeCode(
             }
             gpu_memory->ReadBlock(address, &instruction, sizeof(instruction));
         }
+        // A computed branch keeps the capture running past the program's end into its constant
+        // data. All-zero words are the padding right after it: stop rather than lowering garbage.
+        if (native.size() >= 16 && instruction.words[0] == 0 && instruction.words[1] == 0 &&
+            instruction.words[2] == 0 && instruction.words[3] == 0) {
+            LOG_WARNING(HW_GPU, "NX2_CAPTURE: zero padding at +{:#x}, ending capture",
+                        index * 16);
+            break;
+        }
         native.push_back(instruction);
         const auto status = capture.Observe(instruction, index);
         if (status == Shader::Ampere::ProgramCaptureState::Result::InvalidTarget) {
+            // Constant data whose low bits happen to decode as a BRA points outside the program.
+            // That is the end of the shader, not a broken shader: lower what was captured.
+            if (native.size() > 16) {
+                native.pop_back();
+                LOG_WARNING(HW_GPU, "NX2_CAPTURE: data word at +{:#x}, ending capture",
+                            index * 16);
+                break;
+            }
             if (const char* dir = std::getenv("EDEN_NX2_SHADER_DUMP")) {
                 const auto path = fmt::format("{}/rejected-{:x}.bin", dir, program_base + native_header_size);
                 if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
