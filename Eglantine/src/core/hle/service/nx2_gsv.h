@@ -1528,11 +1528,11 @@ inline bool Nx2VideoTraceEnabled() {
     return enabled;
 }
 
-// Experimental full-frame replacement hides guest UI; enable only for decoder diagnostics.
+// Decoded video is a background layer; the guest keeps its UI above the red video key.
 inline bool Nx2VideoReplacementEnabled() {
     static const bool enabled = [] {
         const char* value = std::getenv("EDEN_NX2_VIDEO_OVERLAY");
-        return value != nullptr && value[0] == '1';
+        return value == nullptr || value[0] == '1';
     }();
     return enabled;
 }
@@ -2284,17 +2284,22 @@ private:
             .native_tiling = true,
         }};
         if (overlay) {
-            auto& layer = layers.front();
-            layer.width = overlay->width;
-            layer.height = overlay->height;
-            layer.stride = overlay->width;
-            layer.pixel_format = android::PixelFormat::Rgba8888;
-            layer.crop_rect = {0, 0, static_cast<int>(overlay->width), static_cast<int>(overlay->height)};
-            layer.native_tiling = false;
-            layer.cpu_pixels = std::move(overlay);
+            layers.front().blending = Tegra::BlendMode::VideoKey;
+            Tegra::FramebufferConfig video_layer{
+                .width = overlay->width,
+                .height = overlay->height,
+                .stride = overlay->width,
+                .pixel_format = android::PixelFormat::Rgba8888,
+                .transform_flags = android::BufferTransformFlags::Unset,
+                .crop_rect = {0, 0, static_cast<int>(overlay->width), static_cast<int>(overlay->height)},
+                .blending = Tegra::BlendMode::Opaque,
+                .native_tiling = false,
+                .cpu_pixels = std::move(overlay),
+            };
+            layers.insert(layers.begin(), std::move(video_layer));
             if (m_presents % 120 == 0) {
-                LOG_INFO(Service, "nx2:vi2 experimental video replacement: present #{} {}x{}, guest {}x{}",
-                         m_presents, layer.width, layer.height, layout.width, layout.height);
+                LOG_INFO(Service, "nx2:vi2 video composite: present #{} video {}x{}, guest {}x{}",
+                         m_presents, layers[0].width, layers[0].height, layout.width, layout.height);
             }
         }
         std::vector<Nvidia::NvFence> fences;

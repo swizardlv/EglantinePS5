@@ -25,6 +25,7 @@ enum class BlendMode {
     Opaque,
     Premultiplied,
     Coverage,
+    VideoKey,
 };
 
 /**

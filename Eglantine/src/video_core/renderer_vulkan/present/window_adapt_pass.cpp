@@ -9,6 +9,7 @@
 #include "vulkan_hud_shaders.h"
 #include "video_core/framebuffer_config.h"
 #include "video_core/host_shaders/vulkan_present_vert_spv.h"
+#include "video_core/host_shaders/present_video_key_frag_spv.h"
 #include "video_core/renderer_vulkan/present/layer.h"
 #include "video_core/renderer_vulkan/present/present_push_constants.h"
 #include "video_core/renderer_vulkan/present/util.h"
@@ -60,6 +61,9 @@ void WindowAdaptPass::Draw(const Device& device, RasterizerVulkan& rasterizer, S
             break;
         case Tegra::BlendMode::Premultiplied:
             graphics_pipelines[i] = *premultiplied_pipeline;
+            break;
+        case Tegra::BlendMode::VideoKey:
+            graphics_pipelines[i] = *video_key_pipeline;
             break;
         case Tegra::BlendMode::Coverage:
             graphics_pipelines[i] = *coverage_pipeline;
@@ -196,6 +200,9 @@ void WindowAdaptPass::CreatePipelines(const Device& device) {
                                             std::tie(vertex_shader, fragment_shader));
     premultiplied_pipeline = CreateWrappedPremultipliedBlendingPipeline(
         device, render_pass, pipeline_layout, std::tie(vertex_shader, fragment_shader));
+    video_key_shader = BuildShader(device, PRESENT_VIDEO_KEY_FRAG_SPV);
+    video_key_pipeline = CreateWrappedPremultipliedBlendingPipeline(
+        device, render_pass, pipeline_layout, std::tie(vertex_shader, video_key_shader));
     coverage_pipeline = CreateWrappedCoverageBlendingPipeline(
         device, render_pass, pipeline_layout, std::tie(vertex_shader, fragment_shader));
 }

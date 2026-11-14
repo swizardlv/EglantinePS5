@@ -25,9 +25,9 @@ int main(int argc, char** argv) {
 ''')
     compiler = shutil.which('clang++-18') or shutil.which('clang++') or 'g++'
     subprocess.run([compiler, '-std=c++20', '-Wall', '-Wextra', '-Werror', str(cpp), '-o', str(exe)], check=True)
-    for value, expected in [(None, False), ('0', False), ('1', True), ('false', False)]:
+    for value, expected in [(None, True), ('0', False), ('1', True), ('false', False)]:
         env = dict(os.environ)
         env.pop('EDEN_NX2_VIDEO_OVERLAY', None)
         if value is not None: env['EDEN_NX2_VIDEO_OVERLAY'] = value
         subprocess.run([str(exe), str(int(expected))], env=env, check=True)
-print('Video replacement PASS: off by default, explicit diagnostic opt-in, startup-only setting')
+print('Video replacement PASS: enabled by default, explicit opt-out, startup-only setting')

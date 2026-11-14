@@ -52,10 +52,12 @@ private:
     vk::Sampler sampler;
     vk::ShaderModule vertex_shader;
     vk::ShaderModule fragment_shader;
+    vk::ShaderModule video_key_shader;
     vk::RenderPass render_pass;
     vk::Pipeline opaque_pipeline;
     vk::Pipeline premultiplied_pipeline;
     vk::Pipeline coverage_pipeline;
+    vk::Pipeline video_key_pipeline;
     vk::PipelineLayout hud_layout;
     vk::Pipeline hud_pipeline;
 };

@@ -58,6 +58,7 @@ set(SHADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/opengl_smaa.glsl
     ${CMAKE_CURRENT_SOURCE_DIR}/pitch_unswizzle.comp
     ${CMAKE_CURRENT_SOURCE_DIR}/present_area.frag
+    ${CMAKE_CURRENT_SOURCE_DIR}/present_video_key.frag
     ${CMAKE_CURRENT_SOURCE_DIR}/present_bicubic.frag
     ${CMAKE_CURRENT_SOURCE_DIR}/present_zero_tangent.frag
     ${CMAKE_CURRENT_SOURCE_DIR}/present_bspline.frag

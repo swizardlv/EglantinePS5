@@ -107,8 +107,9 @@ void Layer::ConfigureDraw(const Device& device, PresentPushConstants* out_push_c
         (framebuffer.layer_stack_mask & Service::Nvnflinger::LayerStackBit(
                                             Service::Nvnflinger::LayerStackId::Recording)) == 0;
 
+    const bool video_key = framebuffer.blending == Tegra::BlendMode::VideoKey;
     RefreshResources(device, framebuffer);
-    if (!framebuffer.cpu_pixels) {
+    if (!framebuffer.cpu_pixels && !video_key) {
         SetAntiAliasPass(device);
 #ifdef HAS_RESHADE
         SetPostProcessPass(device, is_applet);
@@ -131,7 +132,7 @@ void Layer::ConfigureDraw(const Device& device, PresentPushConstants* out_push_c
         texture_info ? texture_info->image_view : *raw_image_views[image_index];
 
     const bool already_upscaled =
-        framebuffer.cpu_pixels || (texture_info && texture_info->already_upscaled);
+        framebuffer.cpu_pixels || video_key || (texture_info && texture_info->already_upscaled);
     // FXAA or SMAA on top of NVIDIA DLSS's image only blurs it.
     const bool anti_aliased = already_upscaled || (texture_info && texture_info->anti_aliased);
     if (!anti_aliased) {
