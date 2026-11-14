@@ -174,6 +174,51 @@ int main() {
     state = Resolve(-1, fresh, fresh_settings);
     assert(state.profiles.size() == 1 && state.profiles[0].name == "Player 1" && Read(fresh).size() == 1);
 
+    // A named account for replaying an intro: the original account and its save stay intact.
+    const Profile original = state.profiles.front();
+    const std::string save_root = std::string(folder) + "/user/save/0000000000000000/";
+    const std::string original_save = save_root + original.Key() + "/0400245021D2C000/progress";
+    std::filesystem::create_directories(std::filesystem::path(original_save).parent_path());
+    { std::ofstream(original_save) << "existing Yoshi progress"; }
+    std::array<char, kFileBytes> original_accounts{};
+    { std::ifstream(fresh, std::ios::binary).read(original_accounts.data(), original_accounts.size()); }
+    assert(Add(" \t ", fresh, fresh_settings) == -1 && Read(fresh).size() == 1);
+    assert(Add("  Yoshi intro  ", fresh, fresh_settings) == 1);
+    const auto created = Read(fresh);
+    assert(created.size() == 2 && created[1].name == "Yoshi intro");
+    assert(created[1].Valid() && created[1].id != original.id);
+    assert(CurrentIndex(fresh, fresh_settings) == 0);
+    assert(Choose(created[1], 7, fresh_settings));
+    assert(Resolve(7, fresh, fresh_settings).current == 1 && CurrentIndex(fresh, fresh_settings) == 1);
+    // Reloaded launcher and game account reads see the same UUID, never a newly generated one.
+    assert(Read(fresh)[1].id == created[1].id);
+    assert(!std::filesystem::exists(save_root + created[1].Key()));
+    std::string progress;
+    { std::ifstream in(original_save); std::getline(in, progress); }
+    assert(progress == "existing Yoshi progress");
+    std::array<char, kFileBytes> created_accounts{};
+    { std::ifstream(fresh, std::ios::binary).read(created_accounts.data(), created_accounts.size()); }
+    assert(std::memcmp(original_accounts.data(), created_accounts.data(), kHeaderBytes + kEntryBytes) == 0);
+    assert(Choose(original, 7, fresh_settings));
+    assert(Resolve(7, fresh, fresh_settings).profiles[0].id == original.id);
+    assert(CurrentIndex(fresh, fresh_settings) == 0);
+
+    // Refused writes and unreadable account files must not replace existing identities.
+    std::filesystem::create_directory(fresh + ".new");
+    assert(Add("Cannot save", fresh, fresh_settings) == -1 && Read(fresh).size() == 2);
+    assert(CurrentIndex(fresh, fresh_settings) == 0);
+    std::filesystem::remove(fresh + ".new");
+    const std::string invalid = std::string(folder) + "/invalid-profiles.dat";
+    { std::ofstream(invalid) << "short file"; }
+    assert(Add("Do not replace", invalid, fresh_settings) == -1);
+    assert(std::filesystem::file_size(invalid) == 10);
+    assert(Add("耀西开场", fresh, fresh_settings) == 2);
+    assert(Read(fresh)[2].name == "耀西开场");
+    assert(FitName(std::string(28, 'a') + "耀西") == std::string(28, 'a') + "耀");
+    for (std::size_t index = 3; index < kMax; ++index)
+        assert(Add("Another player", fresh, fresh_settings) == static_cast<int>(index));
+    assert(Add("Ninth player", fresh, fresh_settings) == -1 && Read(fresh).size() == kMax);
+
     std::filesystem::remove_all(folder);
     std::puts("Profiles: Eden's file read and written as it is, the first profile keeps what was there, "
               "each profile its own settings and recent games, the choice per PS5 user, removal and names PASS");

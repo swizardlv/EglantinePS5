@@ -216,6 +216,25 @@ inline bool Seed(const Profile& profile, const std::string& settings = SettingsF
     return Settings::WriteWhole(whole, settings);
 }
 
+inline int Add(std::string_view name, const std::string& file = File(),
+               const std::string& settings = SettingsFile()) {
+    const auto first = name.find_first_not_of(" \t\r\n");
+    if (first == std::string_view::npos) return -1;
+    name = name.substr(first, name.find_last_not_of(" \t\r\n") - first + 1);
+    if (std::any_of(name.begin(), name.end(), [](unsigned char c) { return c < 0x20; })) return -1;
+    auto profiles = Read(file);
+    // Never replace an unreadable account file with a new identity.
+    if (profiles.empty() || profiles.size() >= kMax) return -1;
+    Profile profile = Make(name);
+    while (IndexOf(profiles, profile.Key()) >= 0) profile = Make(name);
+    // Seed before publishing the account. A failed account write can leave unused settings,
+    // but never selects an account that the game cannot load.
+    if (!Seed(profile, settings)) return -1;
+    profiles.push_back(std::move(profile));
+    if (!Write(profiles, file)) return -1;
+    return static_cast<int>(profiles.size()) - 1;
+}
+
 // Its settings go with a profile that is taken off the list (its save data stays).
 inline bool Forget(const Profile& profile, const std::string& settings = SettingsFile()) {
     Settings::Json whole = Settings::LoadWhole(settings);
