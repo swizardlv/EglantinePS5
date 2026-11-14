@@ -974,6 +974,8 @@ struct Memory::Impl {
                 if (do_collection) {
                     current_area.last_address = subaddress;
                 } else {
+                    // Deferred writes also store after an overlapping download has finished.
+                    VideoCore::DownloadLanding::Await(address, size);
                     return;
                 }
             }
