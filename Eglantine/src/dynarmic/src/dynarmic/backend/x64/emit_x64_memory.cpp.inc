@@ -775,7 +775,10 @@ void AxxEmitX64::EmitExclusiveReadMemoryInline(AxxEmitContext& ctx, IR::Inst* in
 
         const auto location = EmitReadMemoryMov<bitsize>(code, value_idx, src_ptr, ordered);
 
-        AddFastmemPatch(location, code.getCurr(), wrapped_fn, *fastmem_marker, conf.recompile_on_exclusive_fastmem_failure);
+        if (fastmem_marker) {
+            AddFastmemPatch(location, code.getCurr(), wrapped_fn, *fastmem_marker,
+                            conf.recompile_on_exclusive_fastmem_failure);
+        }
 
         code.L(*end);
 

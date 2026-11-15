@@ -1,0 +1,18 @@
+{
+  "exit_status": 124,
+  "duration_seconds": 184.24788596599865,
+  "start_epoch": 1794682130.6240318,
+  "samples": 180,
+  "screenshots": [
+    30,
+    60,
+    120,
+    170,
+    180
+  ],
+  "layout_gib": 12,
+  "resolution": "0.5x",
+  "sparse_override": 1,
+  "texture_cache_expected_mib": 1024,
+  "texture_cache_critical_mib": 1536
+}

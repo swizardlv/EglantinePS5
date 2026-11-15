@@ -1,0 +1,50 @@
+{
+  "exit_status": 124,
+  "duration_seconds": 606.3623022950014,
+  "samples": 592,
+  "screenshots": [
+    30,
+    60,
+    120,
+    180,
+    240,
+    300,
+    360,
+    420,
+    480,
+    540,
+    590
+  ],
+  "layout_gib": 12,
+  "resolution": "0.5x",
+  "sparse_override": 1,
+  "texture_cache_expected_mib": 1024,
+  "texture_cache_critical_mib": 1536,
+  "build": {
+    "port_commit": "382549d077554ba3341e1b04e7b7620b1d45f6d7",
+    "source_stamp": "eglantine-3140648a668aaebf87bae2dea17512fdca125ba0-d0c38de995e4",
+    "linux_patches": [
+      "d1b7707577e71b9cccd860ae030d6a5c9f72844849688dd823f5ac5e2f6ea417  tools/linux/patches/0051-nup-containers.patch",
+      "3114caf4714f3bda2b7a16eceb7469e496d44c50c04f1efa98f194135c9281a9  tools/linux/patches/0052-linux-frontend.patch",
+      "99a93b70c343834ddac41e56ca2db833251fab55ab1ebf14030a58f90bf2b112  tools/linux/patches/0053-wait-if-equal-64.patch",
+      "1c5d5dda701dcd8fcb3c075cecbb99639bc5eeaca31a8841ebb07efd88d9f7da  tools/linux/patches/0054-nx2-audio-streams.patch",
+      "47fe712faa4f63d9487354df0e53ca8d1f2312de266d1455161b0b7c335ce597  tools/linux/patches/0055-ocarina-title-compute.patch"
+    ],
+    "build_type": "RelWithDebInfo",
+    "frontend": "Linux Qt/SDL, not the PS5 frontend"
+  },
+  "title_visible_seconds": [
+    120,
+    590
+  ],
+  "input_return_to_title": true,
+  "kernel_entries_in_test_window": 0,
+  "termination": "planned timeout; no emulator process remained",
+  "fps": "not directly measured; cache-counter estimate approximately 12 FPS",
+  "archive_sha256": "2ecb28580e9d1bca685f4378c1890133f0ab15d5439c09b28be678cae34c3770",
+  "screenshot_sha256": {
+    "frame-120s.png": "d00e46885716a5c18902ae0e07ab82f16186897e8e446ff76b41732355d29fac",
+    "returned-title.png": "e1a184e74e893cb4892e4584c100acaee6eba9505934f6a5d20e337bb753dc02",
+    "frame-590s.png": "392896b6b6aed2c9641176f06dbd68f84cbe61d76833597c90149e4d284e0377"
+  }
+}

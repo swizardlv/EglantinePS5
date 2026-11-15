@@ -1,0 +1,179 @@
+BC250 Zelda room investigation — 2026-11-15
+
+Status
+Zelda reaches Link's playable room, with movement and camera controls, on the
+Linux AppImage work in PR #107. The demanding door-facing view remains below
+the requested 30 guest FPS minimum. The vertex-ID experiment has no reliable
+gain established by the repeated measurements below. The subsequent
+query-reset candidate has now run on the board after rebase, including the
+frame-generation comparison below; exact Vulkan query-result parity remains
+unverified.
+
+This branch adds two experimental draw-reuse qualifications over PR #107:
+- 3167500739d836b56811cb20b720c618dca1508c: vertex_id_base writes retain the
+  reuse serial. Register storage, macro reads, shadow replay, dirty flags and
+  deferred-instance flushing remain active; indexed base-vertex is separate.
+- a7d17b20050ead08535b9b3c42fa7d4b2f19ba82: clear_report_value is qualified in
+  IsFastDrawDeltaMethod, covering its two serial-break callers. Counter reset
+  dispatch, including repeated identical resets, still executes after pending
+  instances flush. No render_enable or other query-method exemption is added.
+
+Both qualifications have upstream experimental precedent, not merged-fix
+qualification. The vertex-ID case adapts commit
+1eea1f4814c4b9e1020f060c1d9461c2de4c75f9; the counter-reset case narrows commit
+6d5ec9d86fe6b3bad3353dc0b7726fffe3fc7968, whose author explicitly describes it
+as not PR-ready. The existing GPL-3.0-or-later fork attribution is recorded in
+THIRD_PARTY_NOTICES.md. Source references:
+https://github.com/zortos293/Lichii/commit/1eea1f4814c4b9e1020f060c1d9461c2de4c75f9
+https://github.com/zortos293/Lichii/commit/6d5ec9d86fe6b3bad3353dc0b7726fffe3fc7968
+
+Repeated room performance
+Platform: BC250, Bazzite Deck, RADV GFX1013, Mesa 26.2.1. Both arms use the
+same -O3 -g -DNDEBUG -fno-omit-frame-pointer build flags, 1x handheld resolution,
+NoSharpen, Fast GPU accuracy, frame generation off, and FSR/DLSS off. The normal
+hardware/affinity policy is retained. The default AppImage build remains O2;
+O3 alone previously showed no meaningful improvement.
+
+Only 5baf6924682d91c5ea3d43ee41fee892bb6c8489 (A) and
+3167500739d836b56811cb20b720c618dca1508c (B) were compared here. These are NOT
+measurements of the later counter-reset candidate.
+
+Runs were sequential A1/B1/A2/B2, with independent profiles and the same room
+checkpoint. Each actual camera image was reviewed before measurement. Wait
+until game uptime >=250 s, after scheduled startup images, then settle 30 s.
+Read 61 guest vi2 present counters about one second apart; midpoint RPC times
+give 61.23-61.33 s windows. Then issue a SEPARATE 60 s frame_times query. No
+inputs, screenshots, profiling, RenderDoc or verification flags run inside
+either measured window. The debug endpoint remains enabled. Other emulator
+checks were empty, and each owned process ended with focus restored.
+
+Case/build       Counter FPS   Lowest ~1 s FPS   Separate frame-times FPS
+A1 / 5baf692        28.4671          25.5049              28.7203
+B1 / 3167500        28.6496          27.1351              28.5305
+A2 / 5baf692        27.8299          24.4522              28.0049
+B2 / 3167500        28.2137          25.4400              28.0972
+
+Unweighted arm means: counter 28.1485 vs 28.4316; independent frame-times
+28.3626 vs 28.3139. The small differences and observed variation do not
+establish a reliable gain. None establishes a 30 FPS minimum. The lowest
+~1 s values are counter intervals, not individual-frame minima. The frame
+query supplies whole-window statistics but returns only the latest 120 raw
+intervals; those intervals are not a complete trace. BC250-ZELDA-ROOM.json
+preserves the counter intervals and whole-window summaries without host or
+game-file paths. These results describe this room view, not a full-playthrough
+average or a PS5 result.
+
+Validation scope
+On 3167500, separate diagnostic sessions checked 3,660,539 fast-draw candidates
+with zero reported pipeline/view/binding mismatches, then 13,350,393 uniform
+comparisons and 3,520,512 descriptor comparisons with zero reported mismatches.
+The second session left FAST_DRAW_VERIFY unset to exercise actual delta
+preparation. Diagnostic timing is excluded from the performance table.
+FAST_DRAW_VERIFY forces full preparation; all three verifiers inspect their
+specific binding/resource invariants, not Vulkan query result values. These
+results do not qualify the subsequent counter-reset change.
+
+The committed counter-reset source exactly matches the privately compiled
+variant tested with production engine objects and matching static libraries.
+Selected [fast_draw],[maxwell_fast_method] suite: 51,665,207 assertions in
+21 cases passed. Its three new query-reset cases contain 296 assertions.
+The 3167500 negative control passes 248 of those assertions and fails exactly
+48 new serial/reuse expectations; reset dispatch, shadow/dirty updates and
+deferred-instance ordering already pass. The observer's model counter proves
+engine ordering, not real Vulkan query accumulation or fence completion.
+This is a focused suite, not an assertion that every project test ran.
+
+Counter-reset AppImage artifact: source commit a7d17b2, source tree stamp
+eglantine-tree-804dd67dbd5e01d4eb8c570e23f0cab41fe27077, GUI ELF build ID
+03d7980dc01ffdd8ab789acf1baa25950c495ebb, CLI ELF build ID
+98290e45e852e523af5f0b6b9383f38d93229120. Build, synthetic NUP check and isolated
+installation succeeded; an independent matching profile is staged. This
+artifact predates the findings-only commit. At the original findings snapshot
+it had not been launched. The later rebased build runs the identical emulator
+source in the frame-generation tests below; no additional hardware binding
+verifier or exact query-result parity qualification is claimed.
+
+Remaining rendering defect
+Purple/lavender forest soil is reproducible in the fresh opening on earlier
+builds and 5baf692. A native capture first fills the affected soil in pass 59,
+draw interval [519,633): 114 draws. The decoded exports contain no NaN/Inf.
+That pass's 32-shader-hash cap and 118 skipped compressed sampled inputs leave
+the exact draw, shader, texture and cause unresolved. Native capture forces
+full draw preparation during the captured frame; earlier persistent state
+is not excluded. A normal RenderDoc capture has a different cinematic camera
+and cannot serve as a matched negative or establish a RenderDoc-induced fix.
+Raw captures, game images, saves, keys, firmware and dumps remain private.
+
+Next qualification
+Before treating the counter-reset candidate as validated, check actual Vulkan
+reset/draw/report values, accumulation/fence completion and conditional-render
+behavior, plus bindings and rendering under motion. Then repeat clean matched
+performance measurements against 5baf692. Binding verifiers and mock engine
+counters do not replace query-result checks. For the separate color defect,
+existing LOD0 and uneven-mip RGBA8 switches offer isolated diagnostics; neither
+has been tested here, and the latter can increase memory use substantially.
+The 30 FPS goal and rendering investigation remain open. No PS5 execution of
+these two candidates is claimed.
+
+Rebase and frame-generation test — later on 2026-11-15
+Rebased the three investigation commits onto main
+74372f7909b2a4774a6dd6a095f4090e7775d175. The replayed head is
+bc18aaba30b82d56ab6d4180c502128706f73d5f; all three patches compare identical
+with git range-diff. The emulator tree remains
+804dd67dbd5e01d4eb8c570e23f0cab41fe27077, including the exact production and
+test sources exercised by the earlier CPU suite. A fresh AppImage built and
+installed successfully: GUI ELF 75c80355014d37997d5bb2792b5c086c6214aac4,
+CLI ELF f738851189726bf4408eda5b588f00ed72ff4a88.
+
+Compared FG off and Optical Flow 2x (Fsr3 enum 1), multiplier 2, target rate 0,
+using that same executable, checkpoint, matched room view and image settings.
+Both global and per-game settings were explicit, with their default/inherit
+flags accounted for. The Gamescope virtual output reports 2560x1440 at 59.91 Hz;
+internal rendering remains 1x. This is one sequential off/on pair.
+
+Mode/window                Guest FPS    Host Vulkan presents/s
+FG off / counter              28.1706          28.1754
+FG on  / counter              28.1385          55.3303
+FG off / separate frame times  28.2742          28.2718
+FG on  / separate frame times  28.1374          54.7804
+
+The counter windows are about 61 s; the following frame-time queries are
+separate 60 s windows. The lowest ~1 s guest counter intervals were 24.4819
+off and 25.5207 on. The earlier 250 s startup plus 30 s settling protocol was
+retained. All samples identify the same active, unpaused Vulkan game build,
+with no rejected shaders or competing emulators observed.
+
+MangoHud 0.8.4 was explicitly configured with log_interval=0. Bounded CSV-tail
+reads bracket each guest timing window, recording both clocks and file
+identity. After measurement, fully interior records are selected with a
+0.2 s margin at each edge. Host throughput is (rows - 1) divided by elapsed
+span, not an average of instantaneous CSV FPS. Elapsed is nanoseconds since
+logging began. All actual CSV timestamps, selected row counts and rates were
+independently checked; file ages at boundaries were 10-37 ms. No recording,
+screenshots, controls or diagnostic flags ran inside the timing windows.
+MangoHud source references for the metric:
+https://github.com/flightlessmango/MangoHud/blob/v0.8.4/src/logging.cpp
+https://github.com/flightlessmango/MangoHud/blob/v0.8.4/src/overlay.cpp
+https://github.com/flightlessmango/MangoHud/blob/v0.8.4/src/vulkan.cpp
+
+Activation is supported by the effective settings, increased presentation
+rate, and the runtime message emitted after generation gates:
+  [EglantinePS5] framegen: generating 1 extra frame(s) per guest frame
+The attempted F11 photos did not expose the Qt generated-rate status bar, so
+no live Qt-counter screenshot is claimed. Host throughput rose 96.38% in the
+counter window and 93.76% in the separate frame-time window. Guest-rate
+differences were under 0.5%; one pair does not establish a significant change.
+Host presents include generated frames and do not verify physical scanout,
+interpolation quality, input latency, or a 30 guest FPS minimum.
+
+A post-measurement movement/camera smoke test and 12 s recording completed.
+The room remained visible and controls responded. Recording overhead affected
+the clip's overlay rate; it is excluded from the FPS evidence. No device-loss
+or device-fault message appeared. The four known nonfatal Critical messages
+(two SDL audio-device failures, service commands 903 and 10500) remain;
+audio and complete service behavior are not qualified. Both private test
+processes exited with focus restored. The isolated ZeldaFG profile retains
+FG enabled. The opening color defect and exact query-result checks remain open.
+
+BC250-ZELDA-FRAMEGEN.json records the sanitized numerical comparison and
+artifact identities. The companion data-only chart is under docs/evidence/.

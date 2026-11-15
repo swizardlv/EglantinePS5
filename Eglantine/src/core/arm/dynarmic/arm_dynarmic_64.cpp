@@ -416,7 +416,15 @@ void ArmDynarmic64::MakeJit(Common::PageTable* page_table, std::size_t address_s
     config.code_cache_size = std::uint32_t(128_MiB);
 #else
 #if !defined(__PROSPERO__) // not PS5
-    config.code_cache_size = std::uint32_t(16_MiB);
+    config.code_cache_size = std::uint32_t(512_MiB);
+#if defined(__linux__) && defined(ARCHITECTURE_x86_64)
+    if (m_cb->m_process->IsSwitch2()) {
+        // Budget the six shared regions and their writable aliases to fit a rel32-sized span.
+        config.code_cache_size = std::uint32_t(m_core_index == 0 ? 160_MiB :
+                                              m_core_index == 1 ? 144_MiB :
+                                              m_core_index < 6 ? 96_MiB : 16_MiB);
+    }
+#endif
 #else // PS5
     config.code_cache_size = std::uint32_t(m_cb->m_process->IsSwitch2() ? (m_core_index == 0 ? 160_MiB : m_core_index == 1 ? 144_MiB : m_core_index < 6 ? 96_MiB : 16_MiB) : (m_core_index == 0 ? 256_MiB : m_core_index < 3 ? 192_MiB : 128_MiB));
 #endif // PS5

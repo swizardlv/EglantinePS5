@@ -1,0 +1,45 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 9K of event 'cpu-clock:u'
+# Event count (approx.): 92111110190
+#
+# Overhead Command Shared Object Symbol IPC [IPC Coverage]
+# ........ ............... ........................... ....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................... ....................
+#
+4.49% GPU eden-cli [.] VideoCommon::GpuSplit::Drain() - -
+3.25% GPUBack eden-cli [.] VideoCommon::GpuSplit::BackLoop(std::stop_token) - -
+1.63% GPU eden-cli [.] Tegra::DmaPusher::CallMethod(unsigned int) - -
+1.17% GPU libc.so.6 [.] __sched_yield - -
+0.94% GPU eden-cli [.] Tegra::Engines::Maxwell3D::FrontWrite(VideoCommon::GpuSplit&, Tegra::Engines::Maxwell3D::FrontState&, unsigned int, unsigned int, bool, bool) - -
+0.81% GPUBack eden-cli [.] VideoCommon::GpuSplit::Execute(unsigned long const*) - -
+0.77% GPUBack eden-cli [.] Tegra::MemoryManager::GpuToCpuAddress(unsigned long) const - -
+0.54% GPU eden-cli [.] Tegra::Engines::Maxwell3D::FrontRunMacro(Core::System&, VideoCommon::GpuSplit&, Tegra::Engines::Maxwell3D::FrontState&) - -
+0.54% GPUBack libc.so.6 [.] __memmove_avx_unaligned_erms - -
+0.53% CPUCore_2 eden-cli [.] Kernel::KSpinLock::Lock() - -
+0.52% GPU eden-cli [.] Tegra::DmaPusher::ProcessCommands(std::span<Tegra::CommandHeader const, 18446744073709551615ul>, unsigned long) - -
+0.46% GPUBack eden-cli [.] Vulkan::RasterizerVulkan::InnerInvalidation(std::span<std::pair<unsigned long, unsigned long> const, 18446744073709551615ul>) - -
+0.45% CPUCore_5 eden-cli [.] Kernel::KSpinLock::Lock() - -
+0.45% GPUBack eden-cli [.] Vulkan::RasterizerVulkan::AccelerateInlineToMemory(unsigned long, unsigned long, std::span<unsigned char const, 18446744073709551615ul>) - -
+0.45% GPUFencingThrea eden-cli [.] VideoCommon::FenceManager<Vulkan::FenceManagerParams>::ReleaseThreadFunc(std::stop_token) - -
+0.44% CPUCore_1 [JIT] tid 211055 [.] a64_terminal_handler_fast_dispatch_hint - -
+0.44% CPUCore_3 [JIT] tid 211055 [.] a64_terminal_handler_fast_dispatch_hint - -
+0.43% CPUCore_1 eden-cli [.] Kernel::KSpinLock::Lock() - -
+0.41% CPUCore_5 [JIT] tid 211055 [.] a64_000000008132EBA8_fpcr01000000 - -
+0.41% GPU eden-cli [.] Tegra::TuringMacroJit::Thunks<Tegra::Engines::Maxwell3D::FrontRunMacro(Core::System&, VideoCommon::GpuSplit&, Tegra::Engines::Maxwell3D::FrontState&)::{lambda(unsigned int)#2}, Tegra::Engines::Maxwell3D::FrontRunMacro(Core::System&, VideoCommon::GpuSplit&, Tegra::Engines::Maxwell3D::FrontState&)::{lambda(unsigned int, unsigned int)#2}>::CallEmitUntraced(Tegra::TuringMacroJit::State*, unsigned int, unsigned int) - -
+0.35% CPUCore_0 [JIT] tid 211055 [.] a64_terminal_handler_fast_dispatch_hint - -
+0.33% CPUCore_0 eden-cli [.] Kernel::KSpinLock::Lock() - -
+0.33% CPUCore_2 [JIT] tid 211055 [.] a64_terminal_handler_fast_dispatch_hint - -
+0.33% CPUCore_3 eden-cli [.] Kernel::KSpinLock::Lock() - -
+0.32% CPUCore_4 [JIT] tid 211055 [.] a64_terminal_handler_fast_dispatch_hint - -
+0.30% CPUCore_3 eden-cli [.] std::map<std::pair<unsigned long, unsigned long>, std::vector<std::function<void ()>, std::allocator<std::function<void ()> > >, std::less<std::pair<unsigned long, unsigned long> >, std::allocator<std::pair<std::pair<unsigned long, unsigned long> const, std::vector<std::function<void ()>, std::allocator<std::function<void ()> > > > > >::size_type std::__detail::__erase_nodes_if<std::map<std::pair<unsigned long, unsigned long>, std::vector<std::function<void ()>, std::allocator<std::function<void ()> > >, std::less<std::pair<unsigned long, unsigned long> >, std::allocator<std::pair<std::pair<unsigned long, unsigned long> const, std::vector<std::function<void ()>, std::allocator<std::function<void ()> > > > > >, std::map<std::pair<unsigned long, unsigned long>, std::vector<std::function<void ()>, std::allocator<std::function<void ()> > >, std::less<std::pair<unsigned long, unsigned long> >, std::allocator<std::pair<std::pair<unsigned long, unsigned long> const, std::vector<std::function<void ()>, std::allocator<std::function<void ()> > > > > >, Service::Nvidia::Devices::Nx2GpuMemoryRegistry::DrainReleases()::{lambda(auto:1 const&)#1}>(std::map<std::pair<unsigned long, unsigned long>, std::vector<std::function<void ()>, std::allocator<std::function<void ()> > >, std::less<std::pair<unsigned long, unsigned long> >, std::allocator<std::pair<std::pair<unsigned long, unsigned long> const, std::vector<std::function<void ()>, std::allocator<std::function<void ()> > > > > >&, std::map<std::pair<unsigned long, unsigned long>, std::vector<std::function<void ()>, std::allocator<std::function<void ()> > >, std::less<std::pair<unsigned long, unsigned long> >, std::allocator<std::pair<std::pair<unsigned long, unsigned long> const, std::vector<std::function<void ()>, std::allocator<std::function<void ()> > > > > >&, Service::Nvidia::Devices::Nx2GpuMemoryRegistry::DrainReleases()::{lambda(auto:1 const&)#1}) [clone .isra.0] - -
+0.27% GPUBack eden-cli [.] Tegra::Engines::Maxwell3D::CallMethod(Core::System&, unsigned int, unsigned int, bool) - -
+0.26% CPUCore_5 [JIT] tid 211055 [.] a64_terminal_handler_fast_dispatch_hint - -
+0.25% GPUBack libc.so.6 [.] __memset_avx2_unaligned_erms - -
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

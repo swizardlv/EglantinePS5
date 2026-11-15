@@ -1,0 +1,36 @@
+{
+  "binary": "/var/home/bazzite/Applications/EglantinePS5/candidates/mkw-desktop-nearjit/eden-cli",
+  "binary_sha256": "fe00dca8ac46a47c411eee13dc01d4e1160e6c8ab9c776a53c497cc49b2e6ae7",
+  "config_sha256": "e5334a76ce553b46a9de93fc8983958fb0405d1812ca92e3dfb4364b3c61c1da",
+  "flags": {
+    "EDEN_NX2_MME_NATIVE": "1",
+    "MKW_PRESENT_OFFSET": "0x1fafc90",
+    "MKW_AFFINITY": "1",
+    "MKW_MEMORY_LAYOUT_GB": null,
+    "MKW_CONFIG_NAME": "lichii",
+    "EDEN_NX2_UNSAFE_PREEMPTIVE_READS": "1",
+    "EDEN_NX2_FRAMES_AHEAD": "2",
+    "EDEN_PS5_READ_SPIN_US": "0",
+    "EDEN_PS5_GPU_SPIN_US": "0",
+    "EDEN_PS5_WORKER_SPIN_US": "0",
+    "EDEN_NX2_HINT_BACKOFF": null,
+    "EDEN_NX2_COUNTER_BACKOFF": null,
+    "MANGOHUD_CONFIG": "autostart_log=1,log_duration=175,log_interval=0,output_folder=/home/bazzite/eglantine-debug/evidence/mkw-desktop-nearjit-relay-v2-hud"
+  },
+  "relay_held": true,
+  "gpu_policy": "auto",
+  "candidate": {
+    "port_commit": "8dc7ede0ba37bcb801a24b188af225c6ead5ca57",
+    "source_stamp": "eglantine-tree-14bbecca28e17d686a3b1ff49171e175837bf0f6",
+    "elf_build_ids": {
+      "lichii": "d8bb10e5cf8d9426f61bdbd25906c5e236f88fda",
+      "eden-cli": "4acca9dd3b16e60fa9d462285c35f72b59b3381c"
+    },
+    "build_type": "RelWithDebInfo",
+    "frontend": "Linux Qt/SDL, not the PS5 frontend",
+    "tag": "mkw-desktop-nearjit",
+    "cli_sha256": "fe00dca8ac46a47c411eee13dc01d4e1160e6c8ab9c776a53c497cc49b2e6ae7",
+    "present_counter_offset": "0x1fafc90",
+    "origin": "/home/bazzite/Applications/EglantinePS5-NearJit"
+  }
+}

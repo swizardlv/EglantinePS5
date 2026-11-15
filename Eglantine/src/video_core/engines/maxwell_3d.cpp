@@ -357,6 +357,8 @@ bool Maxwell3D::IsFastDrawParameter(u32 method) {
     case MAXWELL3D_REG_INDEX(const_buffer.address_high):
     case MAXWELL3D_REG_INDEX(const_buffer.address_low):
     case MAXWELL3D_REG_INDEX(const_buffer.offset):
+    // Macro engines can read this register; draw setup does not consume it.
+    case MAXWELL3D_REG_INDEX(vertex_id_base):
     case MAXWELL3D_REG_INDEX(global_base_vertex_index):
     case MAXWELL3D_REG_INDEX(global_base_instance_index):
     case MAXWELL3D_REG_INDEX(index_buffer.start_addr_high):
@@ -391,6 +393,8 @@ bool Maxwell3D::IsFastDrawDeltaMethod(u32 method) {
         return true;
     }
     switch (method) {
+    // Counter resets still execute; draw preparation does not consume their state.
+    case MAXWELL3D_REG_INDEX(clear_report_value):
     case MAXWELL3D_REG_INDEX(bind_groups[0].raw_config):
     case MAXWELL3D_REG_INDEX(bind_groups[1].raw_config):
     case MAXWELL3D_REG_INDEX(bind_groups[2].raw_config):

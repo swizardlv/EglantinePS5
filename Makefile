@@ -20,7 +20,7 @@ PS5_PORT ?= 2121
 PYTHON := python3 -B
 RELEASE_APP := build/release/PPSA98515
 
-.PHONY: help release package dev prepare deps deps-status toolchain test install clean distclean
+.PHONY: linux-appimage linux-install help release package dev prepare deps deps-status toolchain test install clean distclean
 
 help: ## List the targets and variables
 	@echo 'EglantinePS5 build - make [target] [VARIABLE=value]'
@@ -75,3 +75,9 @@ distclean: clean ## Also remove the fetched dependencies in .deps and this check
 		fi; \
 		rm -f .local/headless-cache; \
 	fi
+
+linux-appimage: ## Linux Qt/SDL AppImage and separate debug symbols in dist/
+	bash tools/linux/build-appimage.sh
+
+linux-install: ## Install the Linux AppImage on BC250_HOST (default bazzite@192.168.0.167) over SSH
+	bash tools/linux/install-bc250.sh

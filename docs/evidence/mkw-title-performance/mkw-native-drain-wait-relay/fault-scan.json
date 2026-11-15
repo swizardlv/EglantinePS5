@@ -1,0 +1,4 @@
+{
+  "patterns": "unmapped instruction, device loss, guest panic, failed allocation/OOM",
+  "matches": []
+}

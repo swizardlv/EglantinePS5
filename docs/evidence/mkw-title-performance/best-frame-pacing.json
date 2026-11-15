@@ -1,0 +1,14 @@
+{
+  "source": "MangoHud per-frame timings, aligned from filename in verified BC250 timezone UTC-03; alignment precision about one second",
+  "interval_seconds": [
+    60,
+    135
+  ],
+  "frame_count": 2164,
+  "median_ms": 28.752450000000003,
+  "p95_ms": 55.31553999999999,
+  "p99_ms": 142.61131999999847,
+  "frames_over_50ms_percent": 8.040665434380776,
+  "guest_present_average_fps": 29.06,
+  "stable_30_verified": false
+}

@@ -1,0 +1,20 @@
+{
+  "exit_status": 124,
+  "duration_seconds": 184.27,
+  "start_epoch": 1794689666.629938,
+  "samples": 181,
+  "screenshots": [
+    30,
+    60,
+    120,
+    170,
+    180
+  ],
+  "layout_gib": 12,
+  "resolution": "0.5x",
+  "sparse_override": 1,
+  "texture_cache_expected_mib": 1024,
+  "texture_cache_critical_mib": 1536,
+  "reconstructed": true,
+  "reconstruction_note": "Post-capture metadata writer failed. Exit status from GNU time; start epoch from session file birth; duration is last telemetry sample and excludes remaining shutdown time."
+}

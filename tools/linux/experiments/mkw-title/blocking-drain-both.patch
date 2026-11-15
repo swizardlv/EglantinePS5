@@ -1,0 +1,81 @@
+--- a/src/video_core/gpu_split.cpp
++++ b/src/video_core/gpu_split.cpp
+@@ -29,6 +29,14 @@
+ namespace VideoCommon {
+ 
+ namespace {
++
++bool BlockingDrainEnabled() {
++    static const bool enabled = [] {
++        const char* value = std::getenv("EDEN_NX2_BLOCKING_DRAIN");
++        return value != nullptr && value[0] == '1';
++    }();
++    return enabled;
++}
+ 
+ void Pause() {
+ #if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+@@ -120,6 +128,9 @@
+     ring = std::make_unique<u64[]>(RingWords);
+     back_thread = std::jthread([this](std::stop_token stop_token) { BackLoop(stop_token); });
+     active = true;
++    if (BlockingDrainEnabled()) {
++        LOG_INFO(HW_GPU, "Experimental blocking GPU drain enabled after 64 spins");
++    }
+ #ifdef ARCHITECTURE_x86_64
+     // Front macros run compiled (macro_turing_jit.h) only.
+     const char* jit = std::getenv("EDEN_NX2_MME_JIT");
+@@ -303,7 +314,11 @@
+             publish_every = 8;
+             return;
+         }
+-        if (spins < 16384) {
++        if (BlockingDrainEnabled() && spins >= 64) {
++            // Wait on the observed position: a completed store before this call cannot
++            // be missed. Every back-thread progress store notifies this same atomic.
++            consumed.wait(consumed_cache, std::memory_order_acquire);
++        } else if (spins < 16384) {
+             Pause();
+         } else {
+             std::this_thread::yield();
+@@ -339,7 +354,11 @@
+         if (consumed_cache >= position) {
+             return;
+         }
+-        if (spins < 16384) {
++        if (BlockingDrainEnabled() && spins >= 64) {
++            // Wait on the observed position: a completed store before this call cannot
++            // be missed. Every back-thread progress store notifies this same atomic.
++            consumed.wait(consumed_cache, std::memory_order_acquire);
++        } else if (spins < 16384) {
+             Pause();
+         } else {
+             std::this_thread::yield();
+@@ -473,7 +492,8 @@
+         if (available == read_position) {
+             Nx2Profile::Scope scope{Nx2Profile::Zone::SplitWait};
+             // The front usually sends more within microseconds: spin briefly before sleeping.
+-            for (u32 spins = 0; spins < 8192 && available == read_position; ++spins) {
++            const u32 idle_spins = BlockingDrainEnabled() ? 64 : 8192;
++            for (u32 spins = 0; spins < idle_spins && available == read_position; ++spins) {
+                 Pause();
+                 available = published.load(std::memory_order_acquire);
+             }
+@@ -501,11 +521,17 @@
+             // Often enough for the front's partial waits (DrainTo a pending release) too.
+             if (read_position - last_store >= 256 && read_position != available) {
+                 consumed.store(read_position, std::memory_order_release);
++                if (BlockingDrainEnabled()) {
++                    consumed.notify_all();
++                }
+                 last_store = read_position;
+             }
+         }
+         g_back_busy.store(false, std::memory_order_release);
+         consumed.store(read_position, std::memory_order_release);
++        if (BlockingDrainEnabled()) {
++            consumed.notify_all();
++        }
+     }
+ }
+ 

@@ -24,11 +24,9 @@
 #ifdef HAS_OPENGL
 #include "video_core/renderer_opengl/renderer_opengl.h"
 #endif
-#if !defined(__PROSPERO__) // not PS5
-
-#else // PS5
+#if !defined(EDEN_NO_VULKAN)
 #include "video_core/renderer_vulkan/renderer_vulkan.h"
-#endif // PS5
+#endif
 #include "video_core/video_core.h"
 
 namespace {
@@ -42,11 +40,10 @@ std::unique_ptr<VideoCore::RendererBase> CreateRenderer(Core::System& system, Co
     case Settings::RendererBackend::OpenGL_SPIRV:
         return std::make_unique<OpenGL::RendererOpenGL>(emu_window, device_memory, gpu, std::move(context));
 #endif
-#if !defined(__PROSPERO__) // not PS5
-#else // PS5
+#if !defined(EDEN_NO_VULKAN)
     case Settings::RendererBackend::Vulkan:
         return std::make_unique<Vulkan::RendererVulkan>(emu_window, device_memory, gpu, std::move(context));
-#endif // PS5
+#endif
     case Settings::RendererBackend::Null:
         return std::make_unique<Null::RendererNull>(emu_window, gpu, std::move(context));
     default:

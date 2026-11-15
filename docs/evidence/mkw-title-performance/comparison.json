@@ -1,0 +1,240 @@
+[
+  {
+    "candidate": "Native, 300 us spins",
+    "source": "mkw-native-on",
+    "title_average_fps": 27.13,
+    "title_window_fps": [
+      22.85,
+      27.79,
+      27.59,
+      27.63,
+      30.57
+    ],
+    "rss_peak_gib": 9.71,
+    "cpu_average_percent_of_16_threads": 29.8,
+    "gpu_graphics_engine_average_percent": 28.1,
+    "system_swap_peak_gib": 1.5,
+    "metadata_reconstructed": false
+  },
+  {
+    "candidate": "Native, affinity, 300 us spins",
+    "source": "relay-v2/mkw-native-affinity-relay-v2",
+    "title_average_fps": 27.95,
+    "title_window_fps": [
+      21.35,
+      29.8,
+      27.13,
+      29.92,
+      31.51
+    ],
+    "rss_peak_gib": 9.66,
+    "cpu_average_percent_of_16_threads": 28.8,
+    "gpu_graphics_engine_average_percent": 27.0,
+    "system_swap_peak_gib": 1.48,
+    "metadata_reconstructed": false
+  },
+  {
+    "candidate": "Native, affinity, zero spins",
+    "source": "mkw-native-zero-spin-relay-v2",
+    "title_average_fps": 29.06,
+    "title_window_fps": [
+      24.79,
+      29.98,
+      31.06,
+      27.64,
+      30.83
+    ],
+    "rss_peak_gib": 8.92,
+    "cpu_average_percent_of_16_threads": 26.4,
+    "gpu_graphics_engine_average_percent": 29.8,
+    "system_swap_peak_gib": 2.83,
+    "metadata_reconstructed": false
+  },
+  {
+    "candidate": "Wait/yield backoff",
+    "source": "mkw-native-backoff-relay",
+    "title_average_fps": 22.25,
+    "title_window_fps": [
+      19.71,
+      21.24,
+      24.92,
+      22.96,
+      22.51
+    ],
+    "rss_peak_gib": 9.34,
+    "cpu_average_percent_of_16_threads": 30.0,
+    "gpu_graphics_engine_average_percent": 25.7,
+    "system_swap_peak_gib": 2.84,
+    "metadata_reconstructed": false
+  },
+  {
+    "candidate": "O3 CPU optimization",
+    "source": "mkw-native-o3-relay",
+    "title_average_fps": 23.7,
+    "title_window_fps": [
+      19.96,
+      23.24,
+      22.76,
+      23.5,
+      28.51
+    ],
+    "rss_peak_gib": 9.25,
+    "cpu_average_percent_of_16_threads": 27.2,
+    "gpu_graphics_engine_average_percent": 30.4,
+    "system_swap_peak_gib": 2.03,
+    "metadata_reconstructed": false
+  },
+  {
+    "candidate": "O3, compact JIT",
+    "source": "mkw-native-compact-relay",
+    "title_average_fps": 21.98,
+    "title_window_fps": [
+      20.15,
+      19.85,
+      26.67,
+      19.09,
+      23.3
+    ],
+    "rss_peak_gib": 9.32,
+    "cpu_average_percent_of_16_threads": 25.5,
+    "gpu_graphics_engine_average_percent": 29.6,
+    "system_swap_peak_gib": 5.08,
+    "metadata_reconstructed": true
+  },
+  {
+    "candidate": "Newer Lichii build",
+    "source": "mkw-desktop-nearjit-relay-v2",
+    "title_average_fps": 16.45,
+    "title_window_fps": [
+      15.9,
+      16.53,
+      16.54,
+      16.53,
+      16.52
+    ],
+    "rss_peak_gib": 7.56,
+    "cpu_average_percent_of_16_threads": 21.3,
+    "gpu_graphics_engine_average_percent": 22.4,
+    "system_swap_peak_gib": 5.74,
+    "metadata_reconstructed": true
+  },
+  {
+    "candidate": "Native, zero spins, unpinned",
+    "source": "mkw-native-unpinned-relay",
+    "title_average_fps": 16.46,
+    "title_window_fps": [
+      15.55,
+      16.11,
+      18.39,
+      15.42,
+      16.68
+    ],
+    "rss_peak_gib": 7.79,
+    "cpu_average_percent_of_16_threads": 24.5,
+    "gpu_graphics_engine_average_percent": 29.5,
+    "system_swap_peak_gib": 5.01,
+    "metadata_reconstructed": false
+  },
+  {
+    "candidate": "Unpinned, smaller texture cache",
+    "source": "mkw-native-lowcache-relay",
+    "title_average_fps": 16.68,
+    "title_window_fps": [
+      15.2,
+      15.19,
+      17.43,
+      18.92,
+      16.54
+    ],
+    "rss_peak_gib": 8.56,
+    "cpu_average_percent_of_16_threads": 24.7,
+    "gpu_graphics_engine_average_percent": 30.7,
+    "system_swap_peak_gib": 3.91,
+    "metadata_reconstructed": false
+  },
+  {
+    "candidate": "Affinity, asynchronous presentation",
+    "source": "mkw-native-async-relay",
+    "title_average_fps": 26.76,
+    "title_window_fps": [
+      26.76,
+      25.32,
+      29.94,
+      23.89,
+      27.17
+    ],
+    "rss_peak_gib": 9.78,
+    "cpu_average_percent_of_16_threads": 27.4,
+    "gpu_graphics_engine_average_percent": 26.8,
+    "system_swap_peak_gib": 3.22,
+    "metadata_reconstructed": false
+  },
+  {
+    "candidate": "Affinity, smaller texture cache",
+    "source": "mkw-native-lowcache-pinned-relay",
+    "title_average_fps": 25.37,
+    "title_window_fps": [
+      19.74,
+      27.25,
+      29.67,
+      27.33,
+      21.57
+    ],
+    "rss_peak_gib": 7.16,
+    "cpu_average_percent_of_16_threads": 25.6,
+    "gpu_graphics_engine_average_percent": 30.3,
+    "system_swap_peak_gib": 5.04,
+    "metadata_reconstructed": false
+  },
+  {
+    "candidate": "Affinity, quarter resolution",
+    "source": "mkw-native-quarter-pinned-relay",
+    "title_average_fps": 23.74,
+    "title_window_fps": [
+      24.41,
+      23.14,
+      24.34,
+      22.73,
+      23.09
+    ],
+    "rss_peak_gib": 9.41,
+    "cpu_average_percent_of_16_threads": 25.6,
+    "gpu_graphics_engine_average_percent": 25.1,
+    "system_swap_peak_gib": 4.08,
+    "metadata_reconstructed": false
+  },
+  {
+    "candidate": "Atomic front drain wait",
+    "source": "mkw-native-drain-wait-relay",
+    "title_average_fps": 22.76,
+    "title_window_fps": [
+      19.11,
+      23.8,
+      26.27,
+      21.76,
+      22.45
+    ],
+    "rss_peak_gib": 9.39,
+    "cpu_average_percent_of_16_threads": 23.0,
+    "gpu_graphics_engine_average_percent": 30.7,
+    "system_swap_peak_gib": 4.4,
+    "metadata_reconstructed": false
+  },
+  {
+    "candidate": "Atomic front and back waits",
+    "source": "mkw-native-drain-both-relay",
+    "title_average_fps": 22.3,
+    "title_window_fps": [
+      17.69,
+      23.33,
+      20.35,
+      25.92,
+      23.46
+    ],
+    "rss_peak_gib": 9.32,
+    "cpu_average_percent_of_16_threads": 24.0,
+    "gpu_graphics_engine_average_percent": 22.5,
+    "system_swap_peak_gib": 3.95,
+    "metadata_reconstructed": false
+  }
+]

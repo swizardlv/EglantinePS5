@@ -1,0 +1,33 @@
+{
+  "tag": "mkw-native-drain-wait",
+  "port_commit": "382549d077554ba3341e1b04e7b7620b1d45f6d7",
+  "source_stamp": "eglantine-3140648a668aaebf87bae2dea17512fdca125ba0-d0c38de995e4",
+  "linux_patches": [
+    "d1b7707577e71b9cccd860ae030d6a5c9f72844849688dd823f5ac5e2f6ea417  tools/linux/patches/0051-nup-containers.patch",
+    "3114caf4714f3bda2b7a16eceb7469e496d44c50c04f1efa98f194135c9281a9  tools/linux/patches/0052-linux-frontend.patch",
+    "99a93b70c343834ddac41e56ca2db833251fab55ab1ebf14030a58f90bf2b112  tools/linux/patches/0053-wait-if-equal-64.patch",
+    "1c5d5dda701dcd8fcb3c075cecbb99639bc5eeaca31a8841ebb07efd88d9f7da  tools/linux/patches/0054-nx2-audio-streams.patch",
+    "47fe712faa4f63d9487354df0e53ca8d1f2312de266d1455161b0b7c335ce597  tools/linux/patches/0055-ocarina-title-compute.patch"
+  ],
+  "compiler_flags": {
+    "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O3 -g1 -DNDEBUG -fno-omit-frame-pointer -march=znver2",
+    "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O3 -g1 -DNDEBUG -fno-omit-frame-pointer -march=znver2"
+  },
+  "elf_build_id": "28acb466d646a31050a5c5642c944b33549e9ef9",
+  "cli_sha256": "4441bd16b4cefbde90857dc4965b137f90f75b7dd9b7fa2ed8b1e125fbeab49a",
+  "present_counter_offset": "0x21c81e0",
+  "experimental_inputs": {
+    "source/src/video_core/gpu_split.cpp": "c46bf664c8d0e05374ea1d5ca939b231d8d217d13a17d2fdf6aa61af143e7a7a",
+    "drain-wait.patch": "b5970608e66ef871d9e52349e01e348d5e3fc60310935c780b36561e7ac38844",
+    "inject.cmake": "3a2dc023ad505d07f17b16f6836b9dc18f3e2c231214903c2d7d83abc2efce98",
+    "macro-native.cmake": "bfce9f087c6fb9a899daa44791563b5cb0e1b44a49877c67370e46ea2a4c7654",
+    "source/src/core/arm/dynarmic/arm_dynarmic_64.cpp": "5b7de6bdd4ab07d83eb290e7960a8b167f82dba3dcbe30788f056cab600b8240",
+    "source/src/video_core/macro.h": "96863fa84e6387281033abcc8c32360cbbace7e948cf81316c191c15ce441eac",
+    "headless/macro_native.h": "2734e47f58337f603ce4d51e3d1007836dd48724cb53c86bcf527ea276713e58",
+    "headless/macro_matcher.h": "e1b5a1aa6c29a815bc45fcd1ae30d40cfa45eb5d081c15a4f23343edabe90d25",
+    "headless/macro_native_hook.h": "a3a30ae14693d362924b0f9501f300e6b7680fd9978154c708797cd21da78096",
+    "headless/macro_bench.h": "d6c938dae17bb81e929976151b96c82fc8d36133646740526fa3388006c14f4c",
+    "headless/macro_native.cmake": "7c53c1b90ef287dc533a830aacac06500e778b1bbb270045d92f02f31e465dda",
+    "headless/macro_recovery.cmake": "1301ada52e69f8b99cebca5a343c19093ae741c85c9c9ed51454217f26f49bc0"
+  }
+}

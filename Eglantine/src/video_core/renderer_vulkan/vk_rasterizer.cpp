@@ -2728,7 +2728,7 @@ bool RasterizerVulkan::OnCPUWrite(DAddr addr, u64 size) {
             }
         }
     }
-    {
+    if (texture_cache.page_filter.Any(addr, size)) {
         if (!::Eden::Performance::GuestCacheLockOrDefer(texture_cache.mutex)) {
             ::Eden::Performance::DeferWrite(addr, size, ::Eden::Performance::cpu_write_core);
             return false;

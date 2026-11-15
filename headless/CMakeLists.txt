@@ -125,6 +125,7 @@ endif()
 # Core's NS query service owns this implementation from frontend_common.
 target_sources(core PRIVATE "${PROJECT_SOURCE_DIR}/src/frontend_common/play_time_manager.cpp")
 # Replace SDL audio with the optional native sink; the renderer stays null.
+target_compile_definitions(audio_core PRIVATE EDEN_NATIVE_AUDIO_SINK=1)
 get_target_property(audio_sources audio_core SOURCES)
 list(FILTER audio_sources EXCLUDE REGEX "sink/sdl3_sink\\.")
 set_property(TARGET audio_core PROPERTY SOURCES "${audio_sources}")
@@ -171,6 +172,7 @@ endif()
 
 get_target_property(video_sources video_core SOURCES)
 if(NOT EDEN_PS5_VULKAN)
+    target_compile_definitions(video_core PRIVATE EDEN_NO_VULKAN=1)
     # Without Vulkan (the host's test build): Eglantine/src/video_core/video_core.cpp leaves the
     # Vulkan renderer out there too.
     list(FILTER video_sources EXCLUDE REGEX "^(renderer_vulkan|vulkan_common)/")

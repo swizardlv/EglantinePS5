@@ -1,0 +1,49 @@
+{
+  "launcher_sha256": "56a8a98fed16c00e2659e5a1faa118a387c9f0410fd37ebc45d1c382ba243686",
+  "binary": "/var/home/bazzite/Applications/EglantinePS5/candidates/mkw-native/eden-cli",
+  "binary_sha256": "865ebe4ef02ab9371426850bc859a973542bc9e7aa33533503f687038c22c215",
+  "config_sha256": "005c5708c9d9d6b17705af47ad5a064b620adde4d6ca49912786b6294bf67c30",
+  "flags": {
+    "EDEN_NX2_MME_NATIVE": "1",
+    "MKW_PRESENT_OFFSET": "0x1d0a560",
+    "MKW_AFFINITY": "1",
+    "MKW_MEMORY_LAYOUT_GB": null,
+    "MKW_CONFIG_NAME": null,
+    "EDEN_NX2_UNSAFE_PREEMPTIVE_READS": "1",
+    "EDEN_NX2_FRAMES_AHEAD": "2",
+    "EDEN_PS5_READ_SPIN_US": "0",
+    "EDEN_PS5_GPU_SPIN_US": "0",
+    "EDEN_PS5_WORKER_SPIN_US": "0",
+    "EDEN_NX2_HINT_BACKOFF": null,
+    "EDEN_NX2_COUNTER_BACKOFF": null,
+    "MANGOHUD_CONFIG": "autostart_log=1,log_duration=175,log_interval=0,output_folder=/home/bazzite/eglantine-debug/evidence/mkw-native-lowcache-pinned-relay-hud",
+    "MKW_TC_EXPECTED_MIB": "512",
+    "MKW_TC_CRITICAL_MIB": "768"
+  },
+  "relay_held": true,
+  "gpu_policy": "auto",
+  "candidate": {
+    "tag": "mkw-native",
+    "port_commit": "382549d077554ba3341e1b04e7b7620b1d45f6d7",
+    "source_stamp": "eglantine-3140648a668aaebf87bae2dea17512fdca125ba0-d0c38de995e4",
+    "patches": {
+      "tools/linux/patches/0051-nup-containers.patch": "d1b7707577e71b9cccd860ae030d6a5c9f72844849688dd823f5ac5e2f6ea417",
+      "tools/linux/patches/0052-linux-frontend.patch": "3114caf4714f3bda2b7a16eceb7469e496d44c50c04f1efa98f194135c9281a9",
+      "tools/linux/patches/0053-wait-if-equal-64.patch": "99a93b70c343834ddac41e56ca2db833251fab55ab1ebf14030a58f90bf2b112",
+      "tools/linux/patches/0054-nx2-audio-streams.patch": "1c5d5dda701dcd8fcb3c075cecbb99639bc5eeaca31a8841ebb07efd88d9f7da",
+      "tools/linux/patches/0055-ocarina-title-compute.patch": "47fe712faa4f63d9487354df0e53ca8d1f2312de266d1455161b0b7c335ce597"
+    },
+    "cli_sha256": "865ebe4ef02ab9371426850bc859a973542bc9e7aa33533503f687038c22c215",
+    "experimental_native_macro_integration": {
+      "headless/macro_native.h": "2734e47f58337f603ce4d51e3d1007836dd48724cb53c86bcf527ea276713e58",
+      "headless/macro_native_hook.h": "a3a30ae14693d362924b0f9501f300e6b7680fd9978154c708797cd21da78096",
+      "headless/macro_matcher.h": "e1b5a1aa6c29a815bc45fcd1ae30d40cfa45eb5d081c15a4f23343edabe90d25",
+      "headless/macro_bench.h": "d6c938dae17bb81e929976151b96c82fc8d36133646740526fa3388006c14f4c",
+      "headless/macro_native.cmake": "7c53c1b90ef287dc533a830aacac06500e778b1bbb270045d92f02f31e465dda"
+    },
+    "integration_inputs": {
+      "/home/heyde/scratch/mkw-bc250/native/macro-native.cmake": "2eeb9f3f9497a6ae06747b3529338fd30b82daa532a80a636e67d427fd78dc67",
+      "/home/heyde/scratch/mkw-bc250/native/inject.cmake": "b841db5884488e17c6786f6ebaa57fa009cc755e27f5959cb8f81ad0e637d2d8"
+    }
+  }
+}

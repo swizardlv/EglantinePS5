@@ -1,0 +1,12 @@
+{
+  "capture_status": 0,
+  "pid": 211055,
+  "profile_interval_seconds": [
+    60,
+    90
+  ],
+  "diagnostic_only": true,
+  "note": "PERF_BUILDID_DIR enables JIT symbol maps; this capture is for hotspot attribution, not speedup qualification.",
+  "perf_status": 0,
+  "report_status": 0
+}

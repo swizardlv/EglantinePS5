@@ -20,6 +20,13 @@ Local-wireless multiplayer through Eden rooms is new in v1.000.000 and experimen
 [setup guide and current limitations](docs/MULTIPLAYER.md) and the
 [validation status](docs/MULTIPLAYER_IMPLEMENTATION.md); Tailscale forwarding is not yet qualified.
 
+## Linux testing on a BC250
+
+`make linux-appimage JOBS=4` builds a Linux Qt/SDL AppImage with separate debug symbols.
+`make linux-install` deploys it over SSH to `BC250_HOST` (default `bazzite@192.168.0.167`)
+using a separate test profile. See [Linux build and capture instructions](tools/linux/README.txt)
+for dependencies, debugging tools, and the differences from the PS5 frontend.
+
 ## Project foundation
 
 > [!IMPORTANT]
