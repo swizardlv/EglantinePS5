@@ -107,6 +107,34 @@ vk::Buffer CreateBuffer(const Device& device, const MemoryAllocator& memory_allo
     return memory_allocator.CreateBuffer(
         buffer_ci, device.IsMoltenVK() ? MemoryUsage::Stream : MemoryUsage::DeviceLocal);
 }
+
+#if defined(__PROSPERO__) // PS5
+// The console's driver (RADV with the PS5 winsys) splits a long command stream only before a
+// draw or a dispatch, and what lies between two splits must fit in one GPU submission (about
+// 1M words). A run of buffer copies with nothing drawn in between has nowhere to split: in
+// Donkey Kong Bananza, smashing the first rock wall uploads ~27,000 small ranges at once, and
+// with one copy and two barriers each (~45 words) that was 1.2M words: the submission failed
+// with VK_ERROR_DEVICE_LOST ("a submission holds more words between two splits than one AGC
+// submission can"). Batched stream uploads (Scheduler::RecordUpload) keep that burst smaller,
+// but nothing bounds it. The copies a command buffer collects are counted, and it is submitted
+// before such a run gets that long. Normal frames record far fewer.
+constexpr size_t COPIES_PER_SUBMISSION = 8192;
+
+void SubmitLongCopyRuns(Scheduler& scheduler, size_t regions) {
+    static u64 tick = 0;
+    static size_t copies = 0;
+    if (scheduler.CurrentTick() != tick) {
+        tick = scheduler.CurrentTick();
+        copies = 0;
+    }
+    copies += 1 + regions;
+    if (copies >= COPIES_PER_SUBMISSION) {
+        scheduler.Flush();
+        tick = scheduler.CurrentTick();
+        copies = 0;
+    }
+}
+#endif // PS5
 } // Anonymous namespace
 
 Buffer::Buffer(BufferCacheRuntime& runtime, VideoCommon::NullBufferParams null_params)
@@ -598,6 +626,9 @@ void BufferCacheRuntime::CopyBuffer(VkBuffer dst_buffer, VkBuffer src_buffer,
                                              vk::CommandBuffer, vk::CommandBuffer upload_cmdbuf) {
             upload_cmdbuf.CopyBuffer(src_buffer, dst_buffer, vk_copies);
         });
+#if defined(__PROSPERO__) // PS5
+        SubmitLongCopyRuns(scheduler, vk_copies.size());
+#endif // PS5
         return;
     }
 
@@ -607,6 +638,9 @@ void BufferCacheRuntime::CopyBuffer(VkBuffer dst_buffer, VkBuffer src_buffer,
         // normal recording path and tick-based reuse.
         scheduler.RecordUpload(src_buffer, dst_buffer,
                                std::span<const VkBufferCopy>{vk_copies.data(), vk_copies.size()});
+#if defined(__PROSPERO__) // PS5
+        SubmitLongCopyRuns(scheduler, vk_copies.size());
+#endif // PS5
         return;
     }
     scheduler.Record([src_buffer, dst_buffer, vk_copies, barrier](vk::CommandBuffer cmdbuf) {
@@ -622,6 +656,9 @@ void BufferCacheRuntime::CopyBuffer(VkBuffer dst_buffer, VkBuffer src_buffer,
                                    vk::PIPELINE_STAGE_GRAPHICS_COMPUTE_TRANSFER, 0, WRITE_BARRIER);
         }
     });
+#if defined(__PROSPERO__) // PS5
+    SubmitLongCopyRuns(scheduler, vk_copies.size());
+#endif // PS5
 }
 
 void BufferCacheRuntime::PreCopyBarrier() {
